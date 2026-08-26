@@ -999,6 +999,47 @@ GET /api/industry?code=600519,000001,001277
 
 ---
 
+### 29. 获取ETF跟踪标的指数
+
+**接口**: `GET /api/etf-track`
+
+**描述**: 获取ETF基金跟踪的标的指数（数据源：东财基金F10）。结果永久缓存至SQLite（跟踪标的基本不变）；服务启动后自动在后台预热全市场ETF并每日复查新增，已缓存的毫秒级返回。
+
+**请求参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| code | string | 是 | ETF基金代码，支持多个，逗号分隔 |
+
+**请求示例**:
+```
+GET /api/etf-track?code=510300
+GET /api/etf-track?code=510300,159915,513100
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "count": 3,
+    "list": [
+      { "code": "510300", "name": "沪深300ETF华泰柏瑞", "track_index": "沪深300指数" },
+      { "code": "159915", "name": "创业板ETF易方达", "track_index": "创业板指数(价格)" },
+      { "code": "513100", "name": "纳指ETF国泰", "track_index": "纳斯达克100指数" }
+    ],
+    "not_found": []
+  }
+}
+```
+
+**说明**:
+- `track_index`：跟踪标的指数名称
+- `not_found` 列出未查询到的代码
+- 支持A股ETF及QDII等场内基金
+
+---
+
 ## 💡 使用示例
 
 ### Python示例
