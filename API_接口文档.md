@@ -1024,9 +1024,9 @@ GET /api/etf-track?code=510300,159915,513100
   "data": {
     "count": 3,
     "list": [
-      { "code": "510300", "name": "沪深300ETF华泰柏瑞", "track_index": "沪深300指数" },
-      { "code": "159915", "name": "创业板ETF易方达", "track_index": "创业板指数(价格)" },
-      { "code": "513100", "name": "纳指ETF国泰", "track_index": "纳斯达克100指数" }
+      { "code": "510300", "name": "300ETF", "market": "sh", "track_index": "沪深300指数" },
+      { "code": "159915", "name": "创业板", "market": "sz", "track_index": "创业板指数(价格)" },
+      { "code": "513100", "name": "纳指ETF", "market": "sh", "track_index": "纳斯达克100指数" }
     ],
     "not_found": []
   }
@@ -1034,6 +1034,7 @@ GET /api/etf-track?code=510300,159915,513100
 ```
 
 **说明**:
+- `market`：交易所（`sh`/`sz`），取自本地代码库
 - `track_index`：跟踪标的指数名称
 - `not_found` 列出未查询到的代码
 - 支持A股ETF及QDII等场内基金

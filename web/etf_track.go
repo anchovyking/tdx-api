@@ -15,6 +15,7 @@ import (
 
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/injoyai/tdx"
+	"github.com/injoyai/tdx/protocol"
 )
 
 const (
@@ -41,12 +42,14 @@ func InitEtfTrack() {
 		if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS etf_track (
 			code       TEXT PRIMARY KEY,
 			name       TEXT,
+			market     TEXT DEFAULT '',
 			track_index TEXT,
 			updated_at TIMESTAMP
 		)`); err != nil {
 			log.Printf("初始化ETF跟踪标的表失败: %v", err)
 			return
 		}
+		db.Exec("ALTER TABLE etf_track ADD COLUMN market TEXT DEFAULT ''")
 		etfTrackDB = db
 		go etfTrackWarmLoop()
 	})
@@ -82,12 +85,12 @@ func etfTrackWarmLoop() {
 	}
 }
 
-// etfTrackMissingCodes 全市场ETF代码减去已缓存代码
+// etfTrackMissingCodes 全市场ETF代码减去已缓存代码（代码/名称/交易所取自codes.db）
 func etfTrackMissingCodes() ([]string, error) {
-	if tdx.DefaultCodes == nil {
-		return nil, fmt.Errorf("代码缓存未初始化")
+	models, err := getAllCodeModels()
+	if err != nil {
+		return nil, err
 	}
-	all := tdx.DefaultCodes.GetETFs()
 	cached := make(map[string]bool)
 	rows, err := etfTrackDB.Query("SELECT code FROM etf_track")
 	if err != nil {
@@ -102,13 +105,13 @@ func etfTrackMissingCodes() ([]string, error) {
 	rows.Close()
 
 	missing := make([]string, 0)
-	for _, fullCode := range all {
-		code := fullCode
-		if len(code) > 2 {
-			code = code[2:]
+	for _, model := range models {
+		fullCode := model.FullCode()
+		if !protocol.IsETF(fullCode) {
+			continue
 		}
-		if !cached[code] {
-			missing = append(missing, code)
+		if !cached[model.Code] {
+			missing = append(missing, model.Code)
 		}
 	}
 	return missing, nil
@@ -117,7 +120,19 @@ func etfTrackMissingCodes() ([]string, error) {
 type etfTrackInfo struct {
 	Code       string `json:"code"`
 	Name       string `json:"name"`
+	Market     string `json:"market"`
 	TrackIndex string `json:"track_index"`
+}
+
+// etfCodeModel 从codes.db查ETF的代码模型（名称、交易所）
+func etfCodeModel(code string) *tdx.CodeModel {
+	if tdx.DefaultCodes == nil {
+		return nil
+	}
+	if m := tdx.DefaultCodes.Get("sh" + code); m != nil {
+		return m
+	}
+	return tdx.DefaultCodes.Get("sz" + code)
 }
 
 var etfTrackHTTPClient = &http.Client{
@@ -159,16 +174,16 @@ func fetchEtfTrack(code string) (*etfTrackInfo, error) {
 		return nil, fmt.Errorf("未解析到跟踪标的数据")
 	}
 	info := &etfTrackInfo{Code: code, TrackIndex: strings.TrimSpace(m[1])}
-	nameRe := regexp.MustCompile(`基金简称</th><td[^>]*>([^<]+)</td>`)
-	if nm := nameRe.FindStringSubmatch(html); nm != nil {
-		info.Name = strings.TrimSpace(nm[1])
+	if model := etfCodeModel(code); model != nil {
+		info.Name = model.Name
+		info.Market = strings.ToLower(model.Exchange)
 	}
 
 	etfTrackMu.Lock()
 	defer etfTrackMu.Unlock()
 	_, err = etfTrackDB.Exec(
-		"INSERT OR REPLACE INTO etf_track(code,name,track_index,updated_at) VALUES(?,?,?,?)",
-		info.Code, info.Name, info.TrackIndex, time.Now().Format(time.RFC3339))
+		"INSERT OR REPLACE INTO etf_track(code,name,market,track_index,updated_at) VALUES(?,?,?,?,?)",
+		info.Code, info.Name, info.Market, info.TrackIndex, time.Now().Format(time.RFC3339))
 	if err != nil {
 		log.Printf("写入ETF跟踪标的数据失败: %v", err)
 	}
@@ -193,8 +208,8 @@ func handleGetEtfTrack(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		var item etfTrackInfo
-		err := etfTrackDB.QueryRow("SELECT code,name,track_index FROM etf_track WHERE code=?", code).
-			Scan(&item.Code, &item.Name, &item.TrackIndex)
+		err := etfTrackDB.QueryRow("SELECT code,name,market,track_index FROM etf_track WHERE code=?", code).
+			Scan(&item.Code, &item.Name, &item.Market, &item.TrackIndex)
 		if err == sql.ErrNoRows {
 			fetched, fetchErr := fetchEtfTrack(code)
 			if fetchErr != nil || fetched == nil {
@@ -205,6 +220,16 @@ func handleGetEtfTrack(w http.ResponseWriter, r *http.Request) {
 		} else if err != nil {
 			errorResponse(w, "查询ETF跟踪标的数据库失败: "+err.Error())
 			return
+		}
+		if item.Market == "" {
+			if model := etfCodeModel(code); model != nil {
+				item.Name = model.Name
+				item.Market = strings.ToLower(model.Exchange)
+				etfTrackMu.Lock()
+				etfTrackDB.Exec("UPDATE etf_track SET name=?, market=? WHERE code=?",
+					item.Name, item.Market, code)
+				etfTrackMu.Unlock()
+			}
 		}
 		results = append(results, item)
 	}
