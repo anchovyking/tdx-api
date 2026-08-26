@@ -46,6 +46,10 @@ func InitIndustry() {
 			industry2 TEXT DEFAULT '',
 			source    TEXT DEFAULT '',
 			updated_at TIMESTAMP
+		); CREATE TABLE IF NOT EXISTS industry_failed (
+			code      TEXT PRIMARY KEY,
+			fails     INTEGER DEFAULT 0,
+			last_fail TIMESTAMP
 		)`); err != nil {
 			log.Printf("初始化行业表失败: %v", err)
 			return
@@ -58,10 +62,14 @@ func InitIndustry() {
 	})
 }
 
+// warmMu 预热互斥锁：行业与ETF预热串行执行，避免并发触发限流
+var warmMu sync.Mutex
+
 // industryWarmLoop 启动后自动补齐缺失行业数据，之后每天检查一次新增股票
 func industryWarmLoop() {
 	time.Sleep(1 * time.Minute)
 	for {
+		warmMu.Lock()
 		missing, err := industryMissingCodes()
 		if err != nil {
 			log.Printf("行业预热检查失败: %v", err)
@@ -70,20 +78,34 @@ func industryWarmLoop() {
 		} else {
 			log.Printf("行业预热开始，待补 %d 只", len(missing))
 			ok := 0
+			failCount := 0
+			consecutiveFails := 0
 			start := time.Now()
 			for i, code := range missing {
-				if _, err := industryFetchSingle(code); err != nil {
-					log.Printf("行业预热[%d/%d] %s 失败: %v", i+1, len(missing), code, err)
+				_, fetchErr := industryFetchSingle(code)
+				if fetchErr != nil {
+					failCount++
+					log.Printf("行业预热[%d/%d] %s 失败: %v", i+1, len(missing), code, fetchErr)
+					consecutiveFails++
+					if consecutiveFails >= 5 {
+						log.Printf("行业预热连续失败%d次，暂停5分钟防限流", consecutiveFails)
+						time.Sleep(5 * time.Minute)
+						consecutiveFails = 0
+					}
 				} else {
 					ok++
+					consecutiveFails = 0
 				}
-				if (i+1)%100 == 0 {
-					log.Printf("行业预热进度 %d/%d，成功 %d", i+1, len(missing), ok)
+				industryMarkResult(code, fetchErr == nil)
+				if (i+1)%5 == 0 {
+					log.Printf("行业预热进度 %d/%d 成功%d 失败%d 已耗时%.0f分钟",
+						i+1, len(missing), ok, failCount, time.Since(start).Minutes())
 				}
-				time.Sleep(1500 * time.Millisecond)
+				time.Sleep(3 * time.Second)
 			}
 			log.Printf("行业预热完成，成功 %d/%d，耗时 %.0f 分钟", ok, len(missing), time.Since(start).Minutes())
 		}
+		warmMu.Unlock()
 		time.Sleep(24 * time.Hour)
 	}
 }
@@ -108,15 +130,43 @@ func industryMissingCodes() ([]string, error) {
 	rows.Close()
 
 	missing := make([]string, 0)
+	now := time.Now()
 	for _, model := range allCodes {
 		if !protocol.IsStock(model.FullCode()) {
 			continue
 		}
-		if !cached[model.Code] {
+		if !cached[model.Code] && !industrySkipFailed(model.Code, now) {
 			missing = append(missing, model.Code)
 		}
 	}
 	return missing, nil
+}
+
+// industrySkipFailed 失败≥3次且30天内不再重试
+func industrySkipFailed(code string, now time.Time) bool {
+	var fails int
+	var lastFail string
+	if err := industryDB.QueryRow(
+		"SELECT fails,last_fail FROM industry_failed WHERE code=?", code).
+		Scan(&fails, &lastFail); err != nil {
+		return false
+	}
+	if fails < 3 {
+		return false
+	}
+	t, _ := time.Parse(time.RFC3339, lastFail)
+	return now.Sub(t) < 30*24*time.Hour
+}
+
+// industryMarkResult 记录成功（清除失败记录）或失败（累加次数）
+func industryMarkResult(code string, success bool) {
+	if success {
+		industryDB.Exec("DELETE FROM industry_failed WHERE code=?", code)
+		return
+	}
+	industryDB.Exec(`INSERT INTO industry_failed(code,fails,last_fail) VALUES(?,1,?)
+		ON CONFLICT(code) DO UPDATE SET fails=fails+1, last_fail=excluded.last_fail`,
+		code, time.Now().Format(time.RFC3339))
 }
 
 var industryHTTPClient = &http.Client{
@@ -252,6 +302,7 @@ func handleGetIndustry(w http.ResponseWriter, r *http.Request) {
 		if err == sql.ErrNoRows {
 			fetched, fetchErr := industryFetchSingle(code)
 			if fetchErr != nil || fetched == nil {
+				industryMarkResult(code, false)
 				failed = append(failed, code)
 				continue
 			}

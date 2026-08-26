@@ -21,7 +21,7 @@ import (
 const (
 	etfTrackDBPath      = "data/database/etf_track.db"
 	etfTrackHTTPTimeout = 10 * time.Second
-	etfTrackFetchDelay  = 1 * time.Second
+	etfTrackFetchDelay  = 2500 * time.Millisecond
 )
 
 var (
@@ -45,6 +45,10 @@ func InitEtfTrack() {
 			market     TEXT DEFAULT '',
 			track_index TEXT,
 			updated_at TIMESTAMP
+		); CREATE TABLE IF NOT EXISTS etf_track_failed (
+			code      TEXT PRIMARY KEY,
+			fails     INTEGER DEFAULT 0,
+			last_fail TIMESTAMP
 		)`); err != nil {
 			log.Printf("初始化ETF跟踪标的表失败: %v", err)
 			return
@@ -59,6 +63,7 @@ func InitEtfTrack() {
 func etfTrackWarmLoop() {
 	time.Sleep(90 * time.Second)
 	for {
+		warmMu.Lock()
 		missing, err := etfTrackMissingCodes()
 		if err != nil {
 			log.Printf("ETF跟踪标的预热检查失败: %v", err)
@@ -67,20 +72,34 @@ func etfTrackWarmLoop() {
 		} else {
 			log.Printf("ETF跟踪标的预热开始，待补 %d 只", len(missing))
 			ok := 0
+			failCount := 0
+			consecutiveFails := 0
 			start := time.Now()
 			for i, code := range missing {
-				if _, err := fetchEtfTrack(code); err != nil {
-					log.Printf("ETF跟踪标的预热[%d/%d] %s 失败: %v", i+1, len(missing), code, err)
+				_, fetchErr := fetchEtfTrack(code)
+				if fetchErr != nil {
+					failCount++
+					log.Printf("ETF跟踪标的预热[%d/%d] %s 失败: %v", i+1, len(missing), code, fetchErr)
+					consecutiveFails++
+					if consecutiveFails >= 5 {
+						log.Printf("ETF预热连续失败%d次，暂停5分钟防限流", consecutiveFails)
+						time.Sleep(5 * time.Minute)
+						consecutiveFails = 0
+					}
 				} else {
 					ok++
+					consecutiveFails = 0
 				}
-				if (i+1)%100 == 0 {
-					log.Printf("ETF跟踪标的预热进度 %d/%d，成功 %d", i+1, len(missing), ok)
+				etfTrackMarkResult(code, fetchErr == nil)
+				if (i+1)%5 == 0 {
+					log.Printf("ETF跟踪标的预热进度 %d/%d 成功%d 失败%d 已耗时%.0f分钟",
+						i+1, len(missing), ok, failCount, time.Since(start).Minutes())
 				}
 				time.Sleep(etfTrackFetchDelay)
 			}
 			log.Printf("ETF跟踪标的预热完成，成功 %d/%d，耗时 %.0f 分钟", ok, len(missing), time.Since(start).Minutes())
 		}
+		warmMu.Unlock()
 		time.Sleep(24 * time.Hour)
 	}
 }
@@ -105,16 +124,44 @@ func etfTrackMissingCodes() ([]string, error) {
 	rows.Close()
 
 	missing := make([]string, 0)
+	now := time.Now()
 	for _, model := range models {
 		fullCode := model.FullCode()
 		if !protocol.IsETF(fullCode) {
 			continue
 		}
-		if !cached[model.Code] {
+		if !cached[model.Code] && !etfTrackSkipFailed(model.Code, now) {
 			missing = append(missing, model.Code)
 		}
 	}
 	return missing, nil
+}
+
+// etfTrackSkipFailed 失败≥3次且30天内不再重试
+func etfTrackSkipFailed(code string, now time.Time) bool {
+	var fails int
+	var lastFail string
+	if err := etfTrackDB.QueryRow(
+		"SELECT fails,last_fail FROM etf_track_failed WHERE code=?", code).
+		Scan(&fails, &lastFail); err != nil {
+		return false
+	}
+	if fails < 3 {
+		return false
+	}
+	t, _ := time.Parse(time.RFC3339, lastFail)
+	return now.Sub(t) < 30*24*time.Hour
+}
+
+// etfTrackMarkResult 记录成功（清除失败记录）或失败（累加次数）
+func etfTrackMarkResult(code string, success bool) {
+	if success {
+		etfTrackDB.Exec("DELETE FROM etf_track_failed WHERE code=?", code)
+		return
+	}
+	etfTrackDB.Exec(`INSERT INTO etf_track_failed(code,fails,last_fail) VALUES(?,1,?)
+		ON CONFLICT(code) DO UPDATE SET fails=fails+1, last_fail=excluded.last_fail`,
+		code, time.Now().Format(time.RFC3339))
 }
 
 type etfTrackInfo struct {
@@ -213,6 +260,7 @@ func handleGetEtfTrack(w http.ResponseWriter, r *http.Request) {
 		if err == sql.ErrNoRows {
 			fetched, fetchErr := fetchEtfTrack(code)
 			if fetchErr != nil || fetched == nil {
+				etfTrackMarkResult(code, false)
 				failed = append(failed, code)
 				continue
 			}

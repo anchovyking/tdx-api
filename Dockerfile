@@ -30,8 +30,9 @@ RUN go mod tidy && (cd web && go build -ldflags="-s -w" -o ../stock-web .)
 FROM alpine:latest
 
 # 替换Alpine镜像源为阿里云，安装必要的运行时依赖
+# 容错：基础镜像已自带 wget/ca-certificates/tzdata 时跳过安装（离线构建场景）
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
-    apk --no-cache add ca-certificates tzdata wget
+    (apk --no-cache add ca-certificates tzdata wget || echo "apk install skipped, base image already has dependencies")
 
 # 设置时区为上海
 ENV TZ=Asia/Shanghai
