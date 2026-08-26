@@ -1,0 +1,21 @@
+# 运行时数据（SQLite缓存、日志）
+data/
+
+# 日志
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# 压缩包
+*.rar
+*.zip
+
+# Go构建产物
+web/stock-web
+*.exe
+
+# 临时目录
+gotest/
+tmp/

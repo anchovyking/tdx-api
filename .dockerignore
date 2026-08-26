@@ -42,6 +42,13 @@ temp/
 *.tmp
 *.log
 
+# 运行时数据（挂载卷，不进镜像）
+data/
+
+# Python缓存
+__pycache__/
+scripts/__pycache__/
+
 # Example directories (optional, if not needed in production)
 example/
 
