@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -80,11 +81,14 @@ func etfTrackWarmLoop() {
 				if fetchErr != nil {
 					failCount++
 					log.Printf("ETF跟踪标的预热[%d/%d] %s 失败: %v", i+1, len(missing), code, fetchErr)
-					consecutiveFails++
-					if consecutiveFails >= 5 {
-						log.Printf("ETF预热连续失败%d次，暂停5分钟防限流", consecutiveFails)
-						time.Sleep(5 * time.Minute)
-						consecutiveFails = 0
+					// 仅网络类错误触发熔断；数据源无档案的代码不暂停
+					if !errors.Is(fetchErr, errTrackNotFound) {
+						consecutiveFails++
+						if consecutiveFails >= 5 {
+							log.Printf("ETF预热连续失败%d次，暂停5分钟防限流", consecutiveFails)
+							time.Sleep(5 * time.Minute)
+							consecutiveFails = 0
+						}
 					}
 				} else {
 					ok++
@@ -193,6 +197,9 @@ var etfTrackHTTPClient = &http.Client{
 	},
 }
 
+// errTrackNotFound 数据源无此基金档案（未上市占位代码等），非网络错误
+var errTrackNotFound = errors.New("数据源无此基金的跟踪标的数据")
+
 // fetchEtfTrack 从东财基金F10抓取跟踪标的（永久缓存）
 func fetchEtfTrack(code string) (*etfTrackInfo, error) {
 	url := fmt.Sprintf("http://fundf10.eastmoney.com/jbgk_%s.html", code)
@@ -218,7 +225,7 @@ func fetchEtfTrack(code string) (*etfTrackInfo, error) {
 	trackRe := regexp.MustCompile(`跟踪标的</th><td[^>]*>([^<]+)</td>`)
 	m := trackRe.FindStringSubmatch(html)
 	if m == nil {
-		return nil, fmt.Errorf("未解析到跟踪标的数据")
+		return nil, errTrackNotFound
 	}
 	info := &etfTrackInfo{Code: code, TrackIndex: strings.TrimSpace(m[1])}
 	if model := etfCodeModel(code); model != nil {

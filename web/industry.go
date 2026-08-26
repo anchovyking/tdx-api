@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +18,9 @@ import (
 	"github.com/injoyai/tdx/protocol"
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
+
+// errIndustryNotFound 数据源无此股票的行业数据，非网络错误
+var errIndustryNotFound = errors.New("数据源无此股票的行业数据")
 
 const (
 	industryDBPath      = "data/database/industry.db"
@@ -86,11 +90,14 @@ func industryWarmLoop() {
 				if fetchErr != nil {
 					failCount++
 					log.Printf("行业预热[%d/%d] %s 失败: %v", i+1, len(missing), code, fetchErr)
-					consecutiveFails++
-					if consecutiveFails >= 5 {
-						log.Printf("行业预热连续失败%d次，暂停5分钟防限流", consecutiveFails)
-						time.Sleep(5 * time.Minute)
-						consecutiveFails = 0
+					// 仅网络类错误触发熔断；数据源无档案的代码不暂停
+					if !errors.Is(fetchErr, errIndustryNotFound) {
+						consecutiveFails++
+						if consecutiveFails >= 5 {
+							log.Printf("行业预热连续失败%d次，暂停5分钟防限流", consecutiveFails)
+							time.Sleep(5 * time.Minute)
+							consecutiveFails = 0
+						}
 					}
 				} else {
 					ok++
@@ -217,7 +224,7 @@ func industryFetchTHS(code string) (*industryInfo, error) {
 	re := regexp.MustCompile(`行业：</strong><span>\s*([^<]+?)\s*</span>`)
 	m := re.FindSubmatch(decoded)
 	if m == nil {
-		return nil, fmt.Errorf("ths未解析到行业数据")
+		return nil, errIndustryNotFound
 	}
 	info := &industryInfo{Code: code, Source: "ths"}
 	titleRe := regexp.MustCompile(`<title>\s*([^()<>]+?)\s*\(`)
