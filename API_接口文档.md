@@ -2,7 +2,7 @@
 
 ## 🌐 基础信息
 
-**Base URL**: `http://your-server:8080`  
+**Base URL**: `http://192.168.0.222:8080`  
 **Content-Type**: `application/json; charset=utf-8`  
 **编码**: UTF-8
 
