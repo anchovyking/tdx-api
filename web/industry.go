@@ -183,7 +183,7 @@ var industryHTTPClient = &http.Client{
 type industryInfo struct {
 	Code      string `json:"code"`
 	Name      string `json:"name"`
-	Industry  string `json:"industry"`
+	Industry  string `json:"-"`
 	Industry1 string `json:"industry1"`
 	Industry2 string `json:"industry2"`
 	Source    string `json:"source"`

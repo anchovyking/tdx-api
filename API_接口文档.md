@@ -952,7 +952,6 @@ GET /api/industry?code=600519,000001,001277
       {
         "code": "001220",
         "name": "世盟股份",
-        "industry": "物流",
         "industry1": "交通运输",
         "industry2": "物流",
         "source": "ths"
@@ -960,7 +959,6 @@ GET /api/industry?code=600519,000001,001277
       {
         "code": "600519",
         "name": "贵州茅台",
-        "industry": "白酒Ⅱ",
         "industry1": "食品饮料",
         "industry2": "白酒Ⅱ",
         "source": "ths"
@@ -972,7 +970,7 @@ GET /api/industry?code=600519,000001,001277
 ```
 
 **说明**:
-- `industry1` / `industry2`：申万一级 / 二级行业（同花顺口径）
+- `industry1` / `industry2`：申万一级 / 二级行业（同花顺口径），第三方请以这两个字段为准
 - `source`：数据来源，固定为 `ths`
 - `not_found` 列出未查询到的代码
 - 服务启动后会自动在后台预热全市场行业数据（每24小时复查一次新增股票）；已缓存的股票毫秒级返回，未缓存的实时抓取（约1-3秒）并回写缓存
