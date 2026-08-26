@@ -53,7 +53,8 @@ func InitIndustry() {
 		); CREATE TABLE IF NOT EXISTS industry_failed (
 			code      TEXT PRIMARY KEY,
 			fails     INTEGER DEFAULT 0,
-			last_fail TIMESTAMP
+			last_fail TIMESTAMP,
+			last_error TEXT DEFAULT ''
 		)`); err != nil {
 			log.Printf("初始化行业表失败: %v", err)
 			return
@@ -61,6 +62,7 @@ func InitIndustry() {
 		for _, col := range []string{"industry1", "industry2", "source"} {
 			db.Exec("ALTER TABLE industry ADD COLUMN " + col + " TEXT DEFAULT ''")
 		}
+		db.Exec("ALTER TABLE industry_failed ADD COLUMN last_error TEXT DEFAULT ''")
 		industryDB = db
 		go industryWarmLoop()
 	})
@@ -103,7 +105,7 @@ func industryWarmLoop() {
 					ok++
 					consecutiveFails = 0
 				}
-				industryMarkResult(code, fetchErr == nil)
+				industryMarkResult(code, fetchErr)
 				if (i+1)%5 == 0 {
 					log.Printf("行业预热进度 %d/%d 成功%d 失败%d 已耗时%.0f分钟",
 						i+1, len(missing), ok, failCount, time.Since(start).Minutes())
@@ -165,15 +167,15 @@ func industrySkipFailed(code string, now time.Time) bool {
 	return now.Sub(t) < 30*24*time.Hour
 }
 
-// industryMarkResult 记录成功（清除失败记录）或失败（累加次数）
-func industryMarkResult(code string, success bool) {
-	if success {
+// industryMarkResult 记录成功（清除失败记录）或失败（累加次数与原因）
+func industryMarkResult(code string, err error) {
+	if err == nil {
 		industryDB.Exec("DELETE FROM industry_failed WHERE code=?", code)
 		return
 	}
-	industryDB.Exec(`INSERT INTO industry_failed(code,fails,last_fail) VALUES(?,1,?)
-		ON CONFLICT(code) DO UPDATE SET fails=fails+1, last_fail=excluded.last_fail`,
-		code, time.Now().Format(time.RFC3339))
+	industryDB.Exec(`INSERT INTO industry_failed(code,fails,last_fail,last_error) VALUES(?,1,?,?)
+		ON CONFLICT(code) DO UPDATE SET fails=fails+1, last_fail=excluded.last_fail, last_error=excluded.last_error`,
+		code, time.Now().Format(time.RFC3339), truncateErr(err))
 }
 
 var industryHTTPClient = &http.Client{
@@ -309,7 +311,10 @@ func handleGetIndustry(w http.ResponseWriter, r *http.Request) {
 		if err == sql.ErrNoRows {
 			fetched, fetchErr := industryFetchSingle(code)
 			if fetchErr != nil || fetched == nil {
-				industryMarkResult(code, false)
+				if fetchErr == nil {
+					fetchErr = errIndustryNotFound
+				}
+				industryMarkResult(code, fetchErr)
 				failed = append(failed, code)
 				continue
 			}

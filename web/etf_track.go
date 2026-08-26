@@ -49,12 +49,14 @@ func InitEtfTrack() {
 		); CREATE TABLE IF NOT EXISTS etf_track_failed (
 			code      TEXT PRIMARY KEY,
 			fails     INTEGER DEFAULT 0,
-			last_fail TIMESTAMP
+			last_fail TIMESTAMP,
+			last_error TEXT DEFAULT ''
 		)`); err != nil {
 			log.Printf("初始化ETF跟踪标的表失败: %v", err)
 			return
 		}
 		db.Exec("ALTER TABLE etf_track ADD COLUMN market TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE etf_track_failed ADD COLUMN last_error TEXT DEFAULT ''")
 		etfTrackDB = db
 		go etfTrackWarmLoop()
 	})
@@ -94,7 +96,7 @@ func etfTrackWarmLoop() {
 					ok++
 					consecutiveFails = 0
 				}
-				etfTrackMarkResult(code, fetchErr == nil)
+				etfTrackMarkResult(code, fetchErr)
 				if (i+1)%5 == 0 {
 					log.Printf("ETF跟踪标的预热进度 %d/%d 成功%d 失败%d 已耗时%.0f分钟",
 						i+1, len(missing), ok, failCount, time.Since(start).Minutes())
@@ -157,15 +159,24 @@ func etfTrackSkipFailed(code string, now time.Time) bool {
 	return now.Sub(t) < 30*24*time.Hour
 }
 
-// etfTrackMarkResult 记录成功（清除失败记录）或失败（累加次数）
-func etfTrackMarkResult(code string, success bool) {
-	if success {
+// etfTrackMarkResult 记录成功（清除失败记录）或失败（累加次数与原因）
+func etfTrackMarkResult(code string, err error) {
+	if err == nil {
 		etfTrackDB.Exec("DELETE FROM etf_track_failed WHERE code=?", code)
 		return
 	}
-	etfTrackDB.Exec(`INSERT INTO etf_track_failed(code,fails,last_fail) VALUES(?,1,?)
-		ON CONFLICT(code) DO UPDATE SET fails=fails+1, last_fail=excluded.last_fail`,
-		code, time.Now().Format(time.RFC3339))
+	etfTrackDB.Exec(`INSERT INTO etf_track_failed(code,fails,last_fail,last_error) VALUES(?,1,?,?)
+		ON CONFLICT(code) DO UPDATE SET fails=fails+1, last_fail=excluded.last_fail, last_error=excluded.last_error`,
+		code, time.Now().Format(time.RFC3339), truncateErr(err))
+}
+
+// truncateErr 截断错误信息，避免超长
+func truncateErr(err error) string {
+	msg := err.Error()
+	if len(msg) > 200 {
+		msg = msg[:200]
+	}
+	return msg
 }
 
 type etfTrackInfo struct {
@@ -267,7 +278,10 @@ func handleGetEtfTrack(w http.ResponseWriter, r *http.Request) {
 		if err == sql.ErrNoRows {
 			fetched, fetchErr := fetchEtfTrack(code)
 			if fetchErr != nil || fetched == nil {
-				etfTrackMarkResult(code, false)
+				if fetchErr == nil {
+					fetchErr = errTrackNotFound
+				}
+				etfTrackMarkResult(code, fetchErr)
 				failed = append(failed, code)
 				continue
 			}
