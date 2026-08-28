@@ -19,3 +19,6 @@ web/stock-web
 # 临时目录
 gotest/
 tmp/
+
+# 临时下载目录（指数xlsx等）
+temp/

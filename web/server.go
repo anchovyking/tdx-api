@@ -806,9 +806,11 @@ func main() {
 	http.HandleFunc("/api/industry", handleGetIndustry)
 	http.HandleFunc("/api/industry/codes", handleGetIndustryCodes)
 	http.HandleFunc("/api/etf-track", handleGetEtfTrack)
+	http.HandleFunc("/api/indices", handleGetIndices)
 
 	InitIndustry()
 	InitEtfTrack()
+	InitIndices()
 
 	port := ":8080"
 	log.Printf("服务启动成功，访问 http://localhost%s\n", port)
