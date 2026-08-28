@@ -39,12 +39,12 @@ def decode_xlsx_strings(xlsx_path):
             continue
         raw = b''.join(t_matches)
         try:
-            decoded = raw.decode('gbk')
+            decoded = raw.decode('utf-8')
         except UnicodeDecodeError:
             try:
-                decoded = raw.decode('utf-8')
+                decoded = raw.decode('gbk')
             except UnicodeDecodeError:
-                decoded = raw.decode('gbk', errors='replace')
+                decoded = raw.decode('utf-8', errors='replace')
         strings.append(decoded)
     return strings
 
@@ -78,9 +78,12 @@ def parse_sheet1_xml(xlsx_path):
                 if is_match:
                     raw = is_match.group(1)
                     try:
-                        value = raw.decode('gbk')
+                        value = raw.decode('utf-8')
                     except UnicodeDecodeError:
-                        value = raw.decode('gbk', errors='replace')
+                        try:
+                            value = raw.decode('gbk')
+                        except UnicodeDecodeError:
+                            value = raw.decode('utf-8', errors='replace')
                 elif v_match:
                     raw_val = v_match.group(1)
                     if cell_type == 's':
@@ -164,6 +167,7 @@ def main():
         name = cells.get('B', '')
         if not isinstance(name, str):
             name = str(name) if name else ''
+        name = name.strip()
 
         try:
             cur.execute(
