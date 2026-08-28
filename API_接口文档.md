@@ -933,7 +933,7 @@ curl -X POST http://localhost:8080/api/tasks/pull-trade \
 |------|------|------|
 | code | TEXT (PK) | 指数代码（去后缀，如 `000300`、`931247`） |
 | name | TEXT | 指数名称 |
-| market | TEXT | 市场/后缀（`sh`/`sz`/`cs`/`cn`/`bj`/`hk`/`us`/`tz`/`ms`） |
+| market | TEXT | 市场/后缀。可选值及含义：`sh`=上证(沪市) / `sz`=深证(深市) / `cs`=中证(中证指数有限公司编制) / `cn`=国证·跨市场(深圳证券信息/中证国证) / `bj`=北证(北京证券交易所) / `hk`=港股(恒生/港股通指数) / `us`=海外(美股，如纳指、标普500) / `tz`=投资数据网自定义 / `ms`=MSCI(明晟指数) |
 | source | TEXT | 数据来源，固定 `touzid` |
 | updated_at | TEXT | 导入时间 |
 
@@ -974,7 +974,7 @@ GET /api/indices?limit=20&offset=0
 
 **说明**:
 - `code`：指数代码，已去除原文件中的 `.sh`/`.sz`/`.cs` 等后缀
-- `market`：后缀对应的市场标识（`.sh`→`sh` 上证 / `.sz`→`sz` 深证 / `.cs`→`cs` 中证 / `.cn`→`cn` 国证·跨市场 / `.bj`→`bj` 北证 / `.US`→`us` 海外 / `.tz`→`tz` 投资数据网自定义 / `.ms`→`ms` / 无后缀 H 系列→`hk` 港股）
+- `market`：后缀对应的市场标识。值与含义：`sh`=上证（沪市） / `sz`=深证（深市） / `cs`=中证（中证指数有限公司编制） / `cn`=国证·跨市场（深圳证券信息/中证国证） / `bj`=北证（北京证券交易所） / `hk`=港股（恒生/港股通指数，原文件无后缀的 H 系列也归为 hk） / `us`=海外（美股，如 `.NDX.US` 纳指100、`.INX.US` 标普500、`.DJI.US` 道琼斯、`.IXIC.US` 纳斯达克综指） / `tz`=投资数据网自定义 / `ms`=MSCI（明晟指数，如 `746059.ms`）
 - 数据为静态快照，更新需重新运行 `python scripts/import_indices.py`
 
 ---

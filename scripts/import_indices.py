@@ -109,7 +109,19 @@ def parse_sheet1_xml(xlsx_path):
 
 
 def split_code(raw):
-    """将 000300.sh / 931247.cs / HSSCID 拆分为 (code, market)"""
+    """将 000300.sh / 931247.cs / HSSCID 拆分为 (code, market)。
+
+    market 取值及含义：
+        sh = 上证（沪市）
+        sz = 深证（深市）
+        cs = 中证（中证指数有限公司编制）
+        cn = 国证·跨市场（深圳证券信息/中证国证）
+        bj = 北证（北京证券交易所）
+        hk = 港股（恒生/港股通指数，原文件无后缀的 H 系列也归为 hk）
+        us = 海外（美股，如 .NDX.US 纳指、.INX.US 标普500、.DJI.US 道琼斯）
+        tz = 投资数据网自定义
+        ms = MSCI（明晟指数）
+    """
     if not raw or not isinstance(raw, str):
         return None, None
     if '.' in raw:

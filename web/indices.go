@@ -20,8 +20,10 @@ var (
 
 // IndexInfo 指数信息
 type IndexInfo struct {
-	Code   string `json:"code"`
-	Name   string `json:"name"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+	// Market 市场/后缀：sh=上证 / sz=深证 / cs=中证 / cn=国证·跨市场 / bj=北证
+	//       / hk=港股(恒生) / us=海外 / tz=投资数据网自定义 / ms=MSCI
 	Market string `json:"market"`
 	Source string `json:"source"`
 }
