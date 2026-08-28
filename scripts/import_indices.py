@@ -7,7 +7,7 @@
 表 indices 仅保留核心字段：
   code       指数代码（去后缀，如 000300）
   name       指数名称
-  market     市场/后缀（如 sh/sz/cs/cn/bj/us/tz/hk）
+  market     市场/后缀（如 sh/sz/cs/cn/bj/us/hk）
   source     数据来源（固定 touzid）
   updated_at 导入时间
 
@@ -119,14 +119,17 @@ def split_code(raw):
         bj = 北证（北京证券交易所）
         hk = 港股（恒生/港股通指数，原文件无后缀的 H 系列也归为 hk）
         us = 海外（美股，如 .NDX.US 纳指、.INX.US 标普500、.DJI.US 道琼斯）
-        tz = 投资数据网自定义
         ms = MSCI（明晟指数）
     """
     if not raw or not isinstance(raw, str):
         return None, None
     if '.' in raw:
         code, market = raw.rsplit('.', 1)
-        return code, market.lower()
+        market = market.lower()
+        # tz 后缀为投资数据网自定义指数（100000-100030 等），非 TDX 可查询品种，跳过不导入
+        if market == 'tz':
+            return None, None
+        return code, market
     # 无后缀：H 系列为恒生/港股指数
     return raw, 'hk'
 
