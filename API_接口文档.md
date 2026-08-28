@@ -1043,20 +1043,31 @@ GET /api/etf-track?code=510300,159915,513100
 
 **接口**: `GET /api/indices`
 
-**描述**: 查询指数基础信息与估值分位数据（数据源：投资数据网导出的 `指数列表-加权平均值-3年.xlsx`，由 `scripts/import_indices.py` 导入 `data/database/indices.db`）。涵盖沪深/中证/国证/北证/跨境/海外等 535 个指数，含 PE-TTM、PB、PS 历史分位（当前值、历史均值、最小值、20%/50%/80%分位、最大值）与 ROE（近三年）、股息率、市值等。数据为静态快照，需重新导出 xlsx 并运行导入脚本更新。
+**描述**: 查询指数代码与名称列表（数据源：投资数据网导出的 `指数列表-加权平均值-3年.xlsx`，由 `scripts/import_indices.py` 导入 `data/database/indices.db` 的 `indices` 表）。涵盖沪深/中证/国证/北证/港股/海外等 535 个指数。代码已去除后缀、市场后缀单独存为 `market` 字段。数据为静态快照，需重新导出 xlsx 并运行导入脚本更新。
+
+**表 `indices` 字段**:
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| code | TEXT (PK) | 指数代码（去后缀，如 `000300`、`931247`） |
+| name | TEXT | 指数名称 |
+| market | TEXT | 市场/后缀（`sh`/`sz`/`cs`/`cn`/`bj`/`hk`/`us`/`tz`/`ms`） |
+| source | TEXT | 数据来源，固定 `touzid` |
+| updated_at | TEXT | 导入时间 |
 
 **请求参数**:
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| code | string | 否 | 指数代码，支持多个，逗号分隔（如 `000300.sh,399006.sz`） |
+| code | string | 否 | 指数代码（去后缀），支持多个，逗号分隔（如 `000300,399006,931247`） |
+| market | string | 否 | 市场过滤，支持多个，逗号分隔（如 `sh, sz`） |
 | search | string | 否 | 按指数名称模糊搜索 |
 | limit | int | 否 | 返回条数，默认 100，最大 1000 |
 | offset | int | 否 | 偏移量，默认 0 |
 
 **请求示例**:
 ```
-GET /api/indices?code=000300.sh
-GET /api/indices?code=000300.sh,399006.sz,931247.cs
+GET /api/indices?code=000300
+GET /api/indices?code=000300,399006,931247
+GET /api/indices?market=sh,sz
 GET /api/indices?search=沪深300
 GET /api/indices?limit=20&offset=0
 ```
@@ -1072,58 +1083,15 @@ GET /api/indices?limit=20&offset=0
     "limit": 100,
     "offset": 0,
     "list": [
-      {
-        "code": "000300.sh",
-        "name": "沪深300",
-        "publish_date": "2005-04-08 00:00:00",
-        "current_level": 4630.28,
-        "year_return": 0.0001,
-        "category": "0 | 0",
-        "pe_ttm_current": 14.13,
-        "pe_ttm_percentile": 0.7703,
-        "pe_ttm_avg": 0.0,
-        "pe_ttm_min": 0.0,
-        "pe_ttm_p20": 0.0,
-        "pe_ttm_p50": 0.0,
-        "pe_ttm_p80": 0.0,
-        "pe_ttm_max": 0.0,
-        "pb_current": 1.45,
-        "pb_percentile": 0.0,
-        "pb_avg": 0.0,
-        "pb_min": 0.0,
-        "pb_p20": 0.0,
-        "pb_p50": 0.0,
-        "pb_p80": 0.0,
-        "pb_max": 0.0,
-        "ps_current": 0.0,
-        "ps_percentile": 0.0,
-        "ps_avg": 0.0,
-        "ps_min": 0.0,
-        "ps_p20": 0.0,
-        "ps_p50": 0.0,
-        "ps_p80": 0.0,
-        "ps_max": 0.0,
-        "roe_2025": 0.0,
-        "roe_2024": 0.0,
-        "roe_2023": 0.0,
-        "dividend_yield": 0.0273,
-        "market_cap": 0.0,
-        "note": "",
-        "source": "touzid"
-      }
+      { "code": "000300", "name": "沪深300", "market": "sh", "source": "touzid" }
     ]
   }
 }
 ```
 
 **说明**:
-- `code`：指数代码，后缀标识市场（`.sh` 上证 / `.sz` 深证 / `.cs` 中证 / `.cn` 国证·跨市场 / `.bj` 北证 / `.US` 海外 / `.tz` 投资数据网自定义 / `H` 系列为中证 H 股指数）
-- `current_level`：最新收盘点位
-- `year_return`：今年以来收益率
-- `pe_ttm_*` / `pb_*` / `ps_*`：市盈率(TTM)/市净率/市销率的历史分位估值，`*_percentile` 为当前值所处历史分位（0~1，越大越贵）
-- `roe_2025/2024/2023`：近三年净资产收益率
-- `dividend_yield`：股息率；`market_cap`：总市值（部分指数缺失）
-- `category`：投资数据网场内/场外或行业分类标记
+- `code`：指数代码，已去除原文件中的 `.sh`/`.sz`/`.cs` 等后缀
+- `market`：后缀对应的市场标识（`.sh`→`sh` 上证 / `.sz`→`sz` 深证 / `.cs`→`cs` 中证 / `.cn`→`cn` 国证·跨市场 / `.bj`→`bj` 北证 / `.US`→`us` 海外 / `.tz`→`tz` 投资数据网自定义 / `.ms`→`ms` / 无后缀 H 系列→`hk` 港股）
 - 数据为静态快照，更新需重新运行 `python scripts/import_indices.py`
 
 ---
