@@ -803,8 +803,13 @@ func main() {
 	http.HandleFunc("/api/tasks/pull-trade", handleCreatePullTradeTask)
 	http.HandleFunc("/api/tasks", handleListTasks)
 	http.HandleFunc("/api/tasks/", handleTaskOperations)
+	http.HandleFunc("/api/industry", handleGetIndustry)
+	http.HandleFunc("/api/industry/codes", handleGetIndustryCodes)
+	http.HandleFunc("/api/etf-track", handleGetEtfTrack)
 	http.HandleFunc("/api/indices", handleGetIndices)
 
+	InitIndustry()
+	InitEtfTrack()
 	InitIndices()
 
 	port := ":8080"
