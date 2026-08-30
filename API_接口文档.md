@@ -922,7 +922,124 @@ curl -X POST http://localhost:8080/api/tasks/pull-trade \
 }
 ```
 
-### 27. 查询指数列表（投资数据网）
+---
+
+### 27. 获取股票所属行业
+
+**接口**: `GET /api/industry`
+
+**描述**: 获取股票所属行业（同花顺F10，申万一级+二级分类）。结果缓存至SQLite；缓存未命中时实时抓取并回写。
+
+**请求参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| code | string | 是 | 股票代码，支持多个，逗号分隔 |
+
+**请求示例**:
+```
+GET /api/industry?code=001220
+GET /api/industry?code=600519,000001,001277
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "count": 2,
+    "list": [
+      {
+        "code": "001220",
+        "name": "世盟股份",
+        "industry1": "交通运输",
+        "industry2": "物流",
+        "source": "ths"
+      },
+      {
+        "code": "600519",
+        "name": "贵州茅台",
+        "industry1": "食品饮料",
+        "industry2": "白酒Ⅱ",
+        "source": "ths"
+      }
+    ],
+    "not_found": []
+  }
+}
+```
+
+**说明**:
+- `industry1` / `industry2`：申万一级 / 二级行业（同花顺口径），第三方请以这两个字段为准
+- `source`：数据来源，固定为 `ths`
+- `not_found` 列出未查询到的代码
+- 服务启动后会自动在后台预热全市场行业数据（每24小时复查一次新增股票）；已缓存的股票毫秒级返回，未缓存的实时抓取（约1-3秒）并回写缓存
+
+---
+
+### 28. 获取已缓存行业的股票代码
+
+**接口**: `GET /api/industry/codes`
+
+**描述**: 返回行业库中已缓存的全部股票代码，可用于第三方判断数据覆盖范围。
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "count": 5557,
+    "list": ["000001", "000002", "..."]
+  }
+}
+```
+
+---
+
+### 29. 获取ETF跟踪标的指数
+
+**接口**: `GET /api/etf-track`
+
+**描述**: 获取ETF基金跟踪的标的指数（数据源：东财基金F10）。结果永久缓存至SQLite（跟踪标的基本不变）；服务启动后自动在后台预热全市场ETF并每日复查新增，已缓存的毫秒级返回。
+
+**请求参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| code | string | 是 | ETF基金代码，支持多个，逗号分隔 |
+
+**请求示例**:
+```
+GET /api/etf-track?code=510300
+GET /api/etf-track?code=510300,159915,513100
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "count": 3,
+    "list": [
+      { "code": "510300", "name": "300ETF", "market": "sh", "track_index": "沪深300指数" },
+      { "code": "159915", "name": "创业板", "market": "sz", "track_index": "创业板指数(价格)" },
+      { "code": "513100", "name": "纳指ETF", "market": "sh", "track_index": "纳斯达克100指数" }
+    ],
+    "not_found": []
+  }
+}
+```
+
+**说明**:
+- `market`：交易所（`sh`/`sz`），取自本地代码库
+- `track_index`：跟踪标的指数名称
+- `not_found` 列出未查询到的代码
+- 支持A股ETF及QDII等场内基金
+
+---
+
+### 30. 查询指数列表（投资数据网）
 
 **接口**: `GET /api/indices`
 
@@ -1015,7 +1132,26 @@ def search_stock(keyword):
         return data['data']
     return None
 
-# 4. 查询指数列表（对外唯一接口，支持分页/过滤）
+# 4. 获取所属行业（支持批量）
+def get_industry(codes):
+    # codes: 列表或逗号分隔字符串，如 ["600519","000001"] 或 "600519,000001"
+    code_param = ",".join(codes) if isinstance(codes, list) else codes
+    response = requests.get(f"{BASE_URL}/api/industry?code={code_param}", timeout=30)
+    data = response.json()
+    if data['code'] == 0:
+        return {item['code']: item for item in data['data']['list']}
+    return None
+
+# 5. 获取ETF跟踪标的指数
+def get_etf_track(codes):
+    code_param = ",".join(codes) if isinstance(codes, list) else codes
+    response = requests.get(f"{BASE_URL}/api/etf-track?code={code_param}", timeout=30)
+    data = response.json()
+    if data['code'] == 0:
+        return {item['code']: item for item in data['data']['list']}
+    return None
+
+# 6. 查询指数列表（支持分页/过滤）
 def get_indices(limit=20, offset=0, market=None, search=None):
     params = {"limit": limit, "offset": offset}
     if market:
