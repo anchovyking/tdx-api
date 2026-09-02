@@ -84,6 +84,56 @@ function Assert-LastExitCode {
     }
 }
 
+<#
+.SYNOPSIS
+检测本机是否已登录目标 registry。
+
+说明：
+  1. 若配置了 credsStore / credHelpers（如 Docker Desktop 的 desktop.exe），
+     凭证由系统钥匙串管理，config.json 中的 auth 字段为空，无法直接读取，
+     但只要 registry 出现在 auths 中，即认为已由凭据助手托管，可直接推送。
+  2. 若 auths 中存在该 registry 且带 auth / identitytoken 字段，视为已登录。
+#>
+function Test-RegistryLogin {
+    param([string]$Registry)
+
+    $configPath = if ($env:DOCKER_CONFIG) {
+        Join-Path $env:DOCKER_CONFIG 'config.json'
+    }
+    else {
+        Join-Path $HOME '.docker/config.json'
+    }
+
+    if (-not (Test-Path -LiteralPath $configPath)) {
+        return $false
+    }
+
+    try {
+        $cfg = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+    }
+    catch {
+        return $false
+    }
+
+    $auths = $cfg.auths
+    if (-not $auths) { return $false }
+
+    # 情形 2：auths 中直接带有凭据字段
+    $entry = $auths.PSObject.Properties[$Registry]
+    if ($entry -and $entry.Value) {
+        $v = $entry.Value
+        if ($v.auth -or $v.identitytoken) {
+            return $true
+        }
+        # 情形 1：条目存在但凭证为空 -> 可能由 credsStore / credHelpers 托管
+        if ($cfg.credsStore -or $cfg.credHelpers) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 # ---------------- 前置检查 ----------------
 Write-Step '前置检查'
 
@@ -111,14 +161,23 @@ Write-Host "  目标镜像: $ImageName" -ForegroundColor Gray
 Write-Host "  平台:     linux/amd64" -ForegroundColor Gray
 
 # ---------------- 登录 ----------------
+$alreadyLoggedIn = Test-RegistryLogin -Registry $Registry
+
 if ($SkipLogin) {
     Write-Step '跳过登录（-SkipLogin）'
+}
+elseif ($alreadyLoggedIn) {
+    Write-Step '登录阿里云镜像仓库'
+    # 凭证由 Docker Desktop 凭据助手（credsStore）托管，或 config.json 中已有有效凭据
+    Write-Host "  检测到本机已登录 $Registry，跳过登录" -ForegroundColor Gray
+    Write-Ok '复用已有登录状态'
 }
 else {
     Write-Step '登录阿里云镜像仓库'
     if ([string]::IsNullOrWhiteSpace($Username) -or [string]::IsNullOrWhiteSpace($Password)) {
         Write-Fail '缺少凭证：请使用 -Username/-Password 参数，'
-        Write-Host '       或设置环境变量 ALIYUN_REGISTRY_USER / ALIYUN_REGISTRY_PASSWORD。' -ForegroundColor Yellow
+        Write-Host '       或设置环境变量 ALIYUN_REGISTRY_USER / ALIYUN_REGISTRY_PASSWORD；' -ForegroundColor Yellow
+        Write-Host '       若本机已 docker login 过但未被识别，可加 -SkipLogin 强制跳过。' -ForegroundColor Yellow
         exit 1
     }
     Write-Host "  用户名: $Username" -ForegroundColor Gray
