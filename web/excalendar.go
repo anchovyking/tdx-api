@@ -168,6 +168,9 @@ func excalFetchXdxr(codes []string) (ok, fail int) {
 		go func(c string) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			//规范化带前缀,用于品种判定与短码提取
+			full := protocol.AddPrefix(c)
+			isEtf := protocol.IsETF(full)
 			var resp *protocol.XdxrResp
 			err := manager.Do(func(cli *tdx.Client) error {
 				var e error
@@ -180,16 +183,20 @@ func excalFetchXdxr(codes []string) (ok, fail int) {
 				fail++
 				return
 			}
-			short := c
-			if len(c) == 8 {
-				short = c[2:]
+			short := full
+			if len(full) == 8 {
+				short = full[2:]
+			}
+			typ := "stock"
+			if isEtf {
+				typ = "etf"
 			}
 			for _, r := range resp.Records {
 				if r.Category != 1 {
 					continue
 				}
 				excalUpsert(excalRow{
-					Code: short, Market: excalMarket(short), Type: "stock",
+					Code: short, Market: excalMarket(short), Type: typ,
 					ExDate: r.DateStr, DivCash: r.Fenhong, Songzhuan: r.Songzhuangu,
 					Peigu: r.Peigu, Peigujia: r.Peigujia, DivProc: "实施", Source: "xdxr",
 					Title: r.CategoryName,
@@ -422,9 +429,13 @@ func excalHeavyLoop() {
 	interval := excalEnvHours("EXCAL_HEAVY_INTERVAL_HOURS", 24)
 	for {
 		if manager != nil {
-			codes := manager.Codes.GetStocks()
+			stocks := manager.Codes.GetStocks()
+			etfs := manager.Codes.GetETFs()
+			codes := make([]string, 0, len(stocks)+len(etfs))
+			codes = append(codes, stocks...)
+			codes = append(codes, etfs...)
 			ok, fail := excalFetchXdxr(codes)
-			log.Printf("xdxr排期全量完成 ok=%d fail=%d", ok, fail)
+			log.Printf("xdxr排期全量完成 ok=%d fail=%d (股票%d+ETF%d)", ok, fail, len(stocks), len(etfs))
 		}
 		time.Sleep(time.Duration(interval) * time.Hour)
 	}
