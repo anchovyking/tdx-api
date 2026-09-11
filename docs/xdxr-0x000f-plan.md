@@ -215,6 +215,36 @@ POST /api/ex-calendar/refresh?source=xdxr&codes=..(≤50) / source=giant / sourc
 
 ## 11. 第三方使用指南
 
+### 返回格式（`GET /api/ex-calendar`）
+
+```json
+{
+  "code": 0, "message": "success",
+  "data": {
+    "count": 18,
+    "list": [
+      {
+        "code": "001267",      // 6位代码
+        "market": "sz",        // sh/sz/bj
+        "type": "stock",       // stock/etf/fund/reit
+        "ex_date": "2026-09-11",   // 除权除息日，核心字段
+        "record_date": "",     // 登记日（正文解析上线后回填，现为空）
+        "pay_date": "",        // 发放到账日（同上）
+        "announce_date": "",   // 实施公告日期（xdxr源为空，公告源才有）
+        "div_cash": 0.2,       // 每10股分红金额；float32尾差保留2位用
+        "songzhuan": 0,        // 每10股送转数
+        "peigu": 0,            // 配股比例
+        "peigujia": 0,         // 配股价
+        "div_proc": "实施",    // 实施/预案，只采实施
+        "source": "xdxr",      // xdxr/giant/touzid，多源各存一行
+        "title": "除权除息",   // 类别名或公告标题
+        "updated_at": "2026-09-11 17:32:58"  // 入库时间
+      }
+    ]
+  }
+}
+```
+
 ### 时刻1：白天收盘后（16点左右，1次）——先查今天谁除权
 
 ```python
@@ -232,12 +262,57 @@ for code in 名单:
 
 ### 时刻3：单只核对（按需，不用天天轮）
 
+### 单只核对返回格式（`GET /api/xdxr?code=600519`，45条节选1条）
+
+```json
+{
+  "code": 0, "message": "success",
+  "data": {
+    "count": 1,
+    "list": [
+      {
+        "code": "600519",   // 6位代码（去前缀）
+        "records": [
+          {
+            "date": "2024-06-19",     // 事件日期，只看 date==今天 的
+            "category": 1,            // 1=除权除息（只看这个）；2送配股上市/5股本变化等只存档
+            "category_name": "除权除息",
+            "fenhong": 308.76,        // 每10股分红；float32尾差保留2位用
+            "peigujia": 0,            // 配股价，无则0
+            "songzhuangu": 0,         // 每10股送转数
+            "peigu": 0,               // 配股数
+            "raw": "9位hex..."        // 16字节原文，非1类时排查用
+          }
+        ]
+      }
+    ],
+    "not_found": []   // 查不到的代码进这里，不报错
+  }
+}
+```
+
 ```text
 GET /api/xdxr?code=600519            # 单只全历史，看有没有date==今天的category==1
 GET /api/xdxr?code=600519,000001     # 批量，最多50只
 ```
 
 ### 运维补数（别写进日常任务）
+
+### 运维补数返回格式（`POST /api/ex-calendar/refresh`，只支持POST）
+
+```text
+POST /api/ex-calendar/refresh?source=xdxr&codes=600519,000001
+→ {"code":0,"message":"success","data":{"ok":2,"fail":0}}
+   # ok=入库成功只数 fail=失败只数；codes上限50只，错码计入fail
+
+POST /api/ex-calendar/refresh?source=giant
+→ {"code":0,"message":"success","data":{"matched":0}}
+   # matched=本次标题命中数；0表示当天无实施公告，正常
+
+POST /api/ex-calendar/refresh?source=touzid
+→ {"code":-1,"message":"投资数据网抓取失败: TOUZID_COOKIE 未配置,跳过","data":null}
+   # 默认屏蔽；Cookie过期则报"Cookie失效，需重抓"
+```
 
 ```text
 POST /api/ex-calendar/refresh?source=xdxr&codes=600519   # 漏扫手动补，≤50只
