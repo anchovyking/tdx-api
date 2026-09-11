@@ -130,20 +130,123 @@ for code in 持仓或全市场:
 - THS 对ETF有复权序列：`510300` 的 `qfq（01）` 一次拿到 3475 天（2012年上市以来全量）；但 `bfq（00）` 与 `hfq（02）` 连续 `502`，且短时间内第4次请求即被限——再次证明**不可高频轮询 THS**，THS 只配做嫌疑股对账。
 - 代码前缀缺口：`protocol.AddPrefix` 只认 `510/511/512/513/515/159`，`588/56/55` 等ETF号段调 K 线类接口会报“股票代码长度错误”（`DecodeCode` 要求8位）；`IsETF` 认 `51/56/58/15/16`，两处不一致。拟改成 `5开头→sh、1开头→sz` 兜底（6位里5/1开头的不是股票，安全），两市撞号的可转债传全称（如 `sh113XXX`）。
 
-### 9.2 方案：按月排期（不每天发现）
+### 9.2 方案：排期表（每天查一次，白天跑）
 
-ETF一年基本只分0-1次且只有现金分红，1500只每天发现不划算：
+> 验证结论（2026-09-11）：akshare 的基金分红明细走的是东财 `fundf10/.../fhsp_{code}.html` **单只页面**——1500只天天扫必被封，此路出局；新浪ETF分红未定位到可用批量口，暂不承诺。THS 短时4连调即 `502`，同样只能做嫌疑股对账。
 
-1. **排期（月频）**：二选一
-   - A. Tushare `fund_div`（需 token+400积分）：按 `ex_date/ann_date` 批量，直接给除息日+每股派息+方案进度；配套 `fund_daily`（场内基金日线，收盘后2小时更新）可做BFQ交叉验证。
-   - B. 东财系（无 token）：`akshare fund_fh_em`（登记日/除息日/每份分红）或 `stock-sdk getFundDividendList`（`funddataIndex_Interface.aspx?dt=8`，按年份翻页聚合）。akshare 需 pin 版本；调用串行+间隔，一月一次不怕封。
-   - 参考算法：`netbeen/fund-tools calcReturn`（含分红拆分的收益计算，JS栈仅参考）。
-2. **日常（零调用）**：1500只日BFQ走TDX连接池（同股票通道，不封IP）；QFQ本地现算，步长 `(P_prev-D)/P_prev`（`D`单位元/份=元/股，复用股票公式 `S=0`）；只在排期表中的除息日当天处理该ETF。
-3. **对账（低频）**：怀疑不对的个别ETF才调 `ths全量`；影响 `<0.2-0.3%` 的小分红可暂不重拉。
-4. **代码改动**：`AddPrefix` 补 ETF 兜底（见9.1）；分红排期建议放业务系统侧或新增小表，暂不入本仓库。
+1. **排期来源：投资数据网为主（已验证通过），巨潮备选**：
+   - 投资数据网基金公告口：`POST /fund/ajax/announcement/`，体 `{category:"5",follow:"0",search:"",offset(1-based页码，0会500),pagesize}`，需完整登录Cookie + `X-Requested-With/Referer` 头；`category`：0全部/1招募设立/2财务报表/5分红/4拆分折算/3其它。返回 `rsm.data[]`：`fundCode`（`jj`开头场外/`sh`开头场内ETF）、`fundShortName`、`reportName`、`reportSendDate`、`adjunctUrl`（证监会eid站PDF）。分红类累计 `total=1000` 可翻页，ETF/联接/REIT/债基全覆盖。
+   - 只有标题流：除息日/每份金额必须下正文PDF抓，每天命中的才下（几十篇）。每天白天扫增量（按 `reportSendDate` 过滤昨天/今天，翻1-3页），低频无封号之忧；Cookie会过期（**实测约1-2小时即失效，`login_check errno=-1`**），服务端已做探活+失败明示（`Cookie失效，需重抓`），生产需每日重抓或找站方要长效token；Cookie放环境变量 `TOUZID_COOKIE`，**禁止进仓库**。
+   - 股票侧：本站为fund口，股票分红实施公告需另确认站内company口（待验证），否则走巨潮标题流（见下）。
+   - 巨潮备选（已验证一半）：`hisAnnouncement/query` 时间倒序翻页正常、无需登录、连调约20次无封锁；但服务端过滤实测全部失效，只能时间流全扫+本地标题过滤（每天 `<30` 次）；`adjunctUrl` 为 `finalpage/YYYY-MM-DD/<id>.PDF`（直链200可下，同名TXT 404）；**正文三要素提取待分红季拿真实实施公告按PDF解析联调**。
+   - 三组关键词全扫（只认实施）：
+   - `利润分配 + 实施` → 现金分红+送股+转增（占99%以上，都在同一份实施公告里）
+   - `配股`（认 `配股提示性公告`/`配股说明书`）→ 配股除权，除权规则同分红（登记日次一交易日）；一年几单但缺口大，不可漏
+   - `收益分配/分红公告` → ETF和基金分红
+   - 拆/合股：A股现代市场基本绝迹（即 `0x000f` 11/12类股改缩股），真有走重大事项公告，遇到了按 `F` 套公式，不单独建流
+   - **实测结论（2026-09-11）**：`hisAnnouncement/query` 时间倒序翻页正常、无需登录、连调约20次无封锁；但服务端 `searchkey/stock/seDate` 过滤实测全部失效（无指纹会话时被忽略），故只能时间流全扫+本地标题过滤——淡季每天几页、旺季十几页，每天请求 `<30` 次，满足不被封约束；`adjunctUrl` 格式为 `finalpage/YYYY-MM-DD/<id>.PDF`（PDF直链200可下，TXT同名 pattern 404）；**正文三要素（登记日/除息日/方案）提取待分红季（5-7月）拿真实实施公告联调**，实现侧按 PDF 解析预留。
+2. **日常（零日常调用）**：1500只ETF日BFQ走TDX连接池（同股票通道，不封IP）；QFQ本地现算，步长 `(P_prev-D)/P_prev`（`D`单位元/份=元/股，复用股票公式 `S=0`）；只在排期表中的除息日当天处理该ETF。
+3. **第三方节奏不变**：白天查排期表 → 22点后按表拉THS全量（仅命中股）；`xdxr`保留做股票侧兜底校验。
+4. **代码改动**：`AddPrefix` 补 ETF 兜底（见9.1）；新增排期抓取定时任务+日历表+查询接口（暂未实现）。
+5. Sina 1500只串行月查降级为备选（待验证批量口）。
 
-### 9.3 待确认（ETF部分）
+### 9.3 设计原则（已定）：数据源抽象，多源兼容
+
+- 排期表统一结构：`code / 类型(股票/ETF) / ex_date / record_date / 方案 / 进度(预案·实施) / source(giant/touzid/tushare/em) / updated_at`，按 `(code, ex_date, source)` 去重，多源可交叉验证。
+- 抓取器按源独立实现同一接口（增量拉取→正文解析→入库），首批只实现**巨潮**，投资数据网（已验证口径，作为第二个源预留位，Cookie探活+secret管理一并预留），Tushare/东财以后按需加。
+- 查询接口不暴露来源，第三方只按日期/代码查，内部多源合并。
+- 定时配置（环境变量，`web/excalendar.go`）：`EXCAL_LIGHT_INTERVAL_HOURS`（巨潮循环，默认6）、`EXCAL_HEAVY_INTERVAL_HOURS`（xdxr全市场，默认24）；touzid默认屏蔽，需 `EXCAL_TOUZID=1` + `TOUZID_COOKIE` 才启用。
+
+### 9.4 待确认（ETF部分）
 
 - 有无 Tushare token？有走 A，无走 B。
 - `AddPrefix` 的 `5→sh、1→sz` 兜底是否接受？
 - 1500只的 ETF 清单及主要号段（确认前缀覆盖无遗漏）。
+
+## 10. 实现落点（已上线实测，2026-09-11，未推送）
+
+### 文件
+
+| 文件 | 内容 |
+|---|---|
+| `protocol/const.go` | 启用 `TypeXdxr=0x000f` |
+| `protocol/model_xdxr.go`（新建） | 新协议头组包+29字节记录解码（`category==1` 取分红/配股价/送转/配股，每10股口径） |
+| `protocol/model_connect.go` | 注册 `MXdxr` |
+| `client.go` | `handlerDealMessage` 加 `TypeXdxr` 分支；`GetXdxrInfo(code)`（独立MsgID序列 `0x10000000+`，服务端回显匹配，不走 `SendFrame`） |
+| `web/xdxr.go`（新建） | `GET /api/xdxr?code=` 单股+批量（上限50只），`{count,list,not_found}` |
+| `web/excalendar.go`（新建） | 排期表+三抓取器+定时+查询接口（见下） |
+| `web/server.go` | 注册 `/api/xdxr`、`/api/ex-calendar`、`/api/ex-calendar/refresh`；启动调 `InitExCalendar()` |
+| `docker-compose.yml` | 加排期环境变量+中文注解；`./data` 须为tfg属主（root属主会导致容器内写库失败重启） |
+
+### 排期表（`data/database/excalendar.db`）
+
+- `ex_calendar`：`id` 自增主键 + `UNIQUE(code,ex_date,source,title)`；字段 `code/market/type/ex_date/record_date/pay_date/announce_date/div_cash/songzhuan/peigu/peigujia/div_proc/source/title/raw/updated_at`；索引 `ex_date`、`(code,ex_date)`。
+- `ex_fetch_state`：`source/last_ok/last_error/cursor`，各源抓取状态。
+- 同一事件多源各存一行（`source` 参与唯一键，互不覆盖）；按天查只命中 `ex_date` 非空行，按股查以 `source=xdxr` 的金额行为准。
+
+### 抓取器与定时（`web/excalendar.go`，首次启动后2/5分钟各跑一次）
+
+- `xdxr`：全市场股票，连接池4并发扫 `GetXdxrInfo`，`category==1` 入库（`div_proc=实施`），约10~20分钟/轮。
+- `giant`：巨潮标题流翻页到跨天（上限40页，页间1秒），三组关键词本地过滤入库（标题级，`ex_date` 为空待正文解析回填）。
+- `touzid`：默认屏蔽（需 `EXCAL_TOUZID=1` + `TOUZID_COOKIE`）；Cookie实测约1-2小时失效，探活用 `login_check`，失败明示重抓。
+- 环境变量：`EXCAL_LIGHT_INTERVAL_HOURS`（默认6）、`EXCAL_HEAVY_INTERVAL_HOURS`（默认24）。
+
+### 接口
+
+```text
+GET  /api/xdxr?code=600519 / ?code=600519,000001
+GET  /api/ex-calendar?date=YYYYMMDD & code= & type=stock/etf & source=
+POST /api/ex-calendar/refresh?source=xdxr&codes=..(≤50) / source=giant / source=touzid
+```
+
+### 实测证据（docker实测容器，非compose生产容器）
+
+- `/api/xdxr?code=600519` → 45条，与公开分红全对上（2024-06-19/308.76等）；批量 `600519,000001` → 45+80条；错码进 `not_found`。
+- `refresh?source=xdxr&codes=600519,000001` → `ok=2`；`?code=600519` → 30条cat1；`?date=20240619` → 命中。
+- `refresh?source=giant` → `matched=0`（当日无实施公告，符合预期）；无Cookie调touzid → 优雅跳过；有过期Cookie → 明示`Cookie失效，需重抓`。
+- compose生产容器已用同样镜像验证：`health/xdxr/refresh/ex-calendar` 全通。
+
+### 未做（留待后续）
+
+- 正文三要素PDF解析回填（待分红季联调）。
+- `AddPrefix` ETF号段兜底（待确认）。
+- touzid启用（需长效Cookie/token）与站内company口验证。
+- 缓存/预热（已暂缓）。
+
+## 11. 第三方使用指南
+
+### 时刻1：白天收盘后（16点左右，1次）——先查今天谁除权
+
+```python
+r = GET /api/ex-calendar?date=20260911
+# data.list 里有谁，今晚就重点处理谁；为空今天无事
+```
+
+### 时刻2：对名单里的（22点后，逐只）——拉THS全量覆盖
+
+```python
+for code in 名单:
+    full = GET /api/kline-all/ths?code={code}&type=day  # 全量删了重插
+# 不在名单的走老增量，不用动
+```
+
+### 时刻3：单只核对（按需，不用天天轮）
+
+```text
+GET /api/xdxr?code=600519            # 单只全历史，看有没有date==今天的category==1
+GET /api/xdxr?code=600519,000001     # 批量，最多50只
+```
+
+### 运维补数（别写进日常任务）
+
+```text
+POST /api/ex-calendar/refresh?source=xdxr&codes=600519   # 漏扫手动补，≤50只
+POST /api/ex-calendar/refresh?source=giant               # 白天标题流手动补一次
+```
+
+### 红线
+
+1. `ex-calendar` 一天查1-2次就够，数据一天一变，别高频轮询。
+2. `xdxr` 返回全历史（40-80条），只看 `date==今天` 那条，别拿全量当增量。
+3. `refresh` 是运维口，别拿它扫全市场（全量走夜里定时任务）。
+4. `ex-calendar` 按股查会混着 `giant` 标题行（`ex_date` 为空），认准 `source=xdxr` 的有金额行；按天查只命中日期确定的行，直接用。

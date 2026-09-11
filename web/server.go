@@ -808,10 +808,13 @@ func main() {
 	http.HandleFunc("/api/etf-track", handleGetEtfTrack)
 	http.HandleFunc("/api/indices", handleGetIndices)
 	http.HandleFunc("/api/xdxr", handleGetXdxr)
+	http.HandleFunc("/api/ex-calendar", handleGetExCalendar)
+	http.HandleFunc("/api/ex-calendar/refresh", handleRefreshExCalendar)
 
 	InitIndustry()
 	InitEtfTrack()
 	InitIndices()
+	InitExCalendar()
 
 	port := ":8080"
 	log.Printf("服务启动成功，访问 http://localhost%s\n", port)
