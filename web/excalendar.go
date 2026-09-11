@@ -19,7 +19,7 @@ import (
 )
 
 // 除权除息排期表(多源兼容: xdxr/巨潮/投资数据网/...)
-// 设计见 docs/xdxr-0x000f-plan.md 第9节
+// 设计见 docs/除权除息方案.md 第9节
 
 const (
 	excalDBPath = "data/database/excalendar.db"
