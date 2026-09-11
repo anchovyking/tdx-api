@@ -468,7 +468,8 @@ func excalHeavyLoop() {
 // ============ 查询接口 ============
 
 // handleGetExCalendar 查询除权除息排期
-// 示例: GET /api/ex-calendar?date=20260619
+// 示例: GET /api/ex-calendar                       (不传date/code时默认查今天)
+//      GET /api/ex-calendar?date=20260619
 //      GET /api/ex-calendar?code=600519
 //      GET /api/ex-calendar?date=20260619&type=etf
 func handleGetExCalendar(w http.ResponseWriter, r *http.Request) {
@@ -481,6 +482,10 @@ func handleGetExCalendar(w http.ResponseWriter, r *http.Request) {
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
 	if len(code) == 8 {
 		code = code[2:]
+	}
+	//不传date也不传code时,默认查当天
+	if date == "" && code == "" {
+		date = time.Now().Format("20060102")
 	}
 	typ := strings.TrimSpace(r.URL.Query().Get("type"))
 	source := strings.TrimSpace(r.URL.Query().Get("source"))
