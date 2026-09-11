@@ -417,8 +417,9 @@ func excalFetchTouzid() (matched int, err error) {
 // ============ 定时 ============
 //
 // 时间配置(环境变量,容器里加 -e 即可,不配则用默认值):
-//   EXCAL_LIGHT_INTERVAL_HOURS  轻量循环(巨潮+touzid)间隔小时,默认6
+//   EXCAL_LIGHT_INTERVAL_HOURS  轻量循环间隔小时,默认6
 //   EXCAL_HEAVY_INTERVAL_HOURS  重量循环(xdxr全市场)间隔小时,默认24
+//   EXCAL_GIANT                 设为1才启用巨潮抓取(默认停用,除权数据已由xdxr全覆盖)
 //   EXCAL_TOUZID                设为1才启用投资数据网抓取(默认屏蔽,需同时配 TOUZID_COOKIE)
 
 func excalEnvHours(key string, def int) int {
@@ -435,8 +436,11 @@ func excalLightLoop() {
 	time.Sleep(2 * time.Minute)
 	interval := excalEnvHours("EXCAL_LIGHT_INTERVAL_HOURS", 6)
 	for {
-		if _, err := excalFetchGiant(); err != nil {
-			log.Printf("巨潮排期抓取失败: %v", err)
+		//巨潮默认停用(除权数据已由0x000f全覆盖),需 EXCAL_GIANT=1 才启用
+		if os.Getenv("EXCAL_GIANT") == "1" {
+			if _, err := excalFetchGiant(); err != nil {
+				log.Printf("巨潮排期抓取失败: %v", err)
+			}
 		}
 		if os.Getenv("EXCAL_TOUZID") == "1" {
 			if _, err := excalFetchTouzid(); err != nil {

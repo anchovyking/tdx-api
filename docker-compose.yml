@@ -11,10 +11,12 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
-      # 轻循环间隔(小时): 巨潮标题流(+touzid),每次十几个HTTP请求,多跑几次及时捡新公告
+      # 轻循环间隔(小时): 预留(巨潮/touzid均默认停用,启用见下方);不配则默认6
       - EXCAL_LIGHT_INTERVAL_HOURS=6
-      # 重循环间隔(小时): xdxr全市场5000只扫一遍入库,一次约10~20分钟,每天夜里跑一次即可
+      # 重循环间隔(小时): xdxr全市场(股票+ETF约7800只)扫一遍入库,一次约4分钟,每天夜里跑一次即可
       - EXCAL_HEAVY_INTERVAL_HOURS=24
+      # 巨潮抓取默认停用(除权数据已由xdxr 0x000f全覆盖);如需启用打开下面一项
+      # - EXCAL_GIANT=1
       # 投资数据网抓取默认屏蔽;启用需同时打开下面两项
       # - EXCAL_TOUZID=1
       # - TOUZID_COOKIE=找管理员要,不要提交到仓库
