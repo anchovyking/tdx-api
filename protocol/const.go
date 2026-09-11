@@ -13,6 +13,7 @@ const (
 	TypeHistoryMinute      = 0x0FB4 //历史分时数据
 	TypeHistoryMinuteTrade = 0x0FB5 //历史分时交易
 	TypeKline              = 0x052D //K线图
+	TypeXdxr               = 0x000F //除权除息/股本变迁
 )
 
 var (

@@ -807,6 +807,7 @@ func main() {
 	http.HandleFunc("/api/industry/codes", handleGetIndustryCodes)
 	http.HandleFunc("/api/etf-track", handleGetEtfTrack)
 	http.HandleFunc("/api/indices", handleGetIndices)
+	http.HandleFunc("/api/xdxr", handleGetXdxr)
 
 	InitIndustry()
 	InitEtfTrack()

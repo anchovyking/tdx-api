@@ -167,6 +167,9 @@ func (this *Client) handlerDealMessage(c *client.Client, msg ios.Acker) {
 	case protocol.TypeKline:
 		resp, err = protocol.MKline.Decode(f.Data, val.(protocol.KlineCache))
 
+	case protocol.TypeXdxr:
+		resp, err = protocol.MXdxr.Decode(f.Data)
+
 	default:
 		err = fmt.Errorf("通讯类型未解析:0x%X", f.Type)
 
@@ -590,6 +593,33 @@ func (this *Client) GetIndexYearAll(code string) (*protocol.KlineResp, error) {
 
 
  */
+
+// xdxrMsgID 除权接口独立消息ID序列(0x000f 服务端回显该值,须唯一且避开 SendFrame 的小序号)
+var xdxrMsgID uint32 = 0x10000000
+
+// GetXdxrInfo 获取除权除息/股本变迁全历史,code 支持 600519 或 sh600519
+// 注意:0x000f 走新协议头,不经过 SendFrame(其会覆盖 MsgID),此处复用连接独立发送
+func (this *Client) GetXdxrInfo(code string) (*protocol.XdxrResp, error) {
+	exchange, short, err := protocol.DecodeCode(protocol.AddPrefix(code))
+	if err != nil {
+		return nil, err
+	}
+	f := protocol.MXdxr.Frame(exchange, short)
+	f.MsgID = atomic.AddUint32(&xdxrMsgID, 1)
+	if _, err := this.Client.Write(f.Bytes()); err != nil {
+		return nil, err
+	}
+	result, err := this.Wait.Wait(conv.String(f.MsgID))
+	if err != nil {
+		return nil, err
+	}
+	resp, ok := result.(*protocol.XdxrResp)
+	if !ok {
+		return nil, fmt.Errorf("除权数据类型错误")
+	}
+	resp.Code = short
+	return resp, nil
+}
 
 // GetKline 获取k线数据,推荐收盘之后获取,否则会获取到当天的数据
 func (this *Client) GetKline(Type uint8, code string, start, count uint16) (*protocol.KlineResp, error) {
