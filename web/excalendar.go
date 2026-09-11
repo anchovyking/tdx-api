@@ -155,9 +155,13 @@ func excalFetchXdxr(codes []string) (ok, fail int) {
 	if manager == nil {
 		return 0, len(codes)
 	}
+	start := time.Now()
+	lastLog := start
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4)
+	done := 0
+	failCodes := make([]string, 0, 50) //失败样本,最多记录50个
 	for _, code := range codes {
 		code = strings.TrimSpace(code)
 		if code == "" {
@@ -179,8 +183,22 @@ func excalFetchXdxr(codes []string) (ok, fail int) {
 			})
 			mu.Lock()
 			defer mu.Unlock()
+			done++
+			//进度日志:每200只或每10秒打印一次
+			if done%200 == 0 || time.Since(lastLog) >= 10*time.Second {
+				lastLog = time.Now()
+				log.Printf("xdxr排期进度 %d/%d 成功%d 失败%d 已耗时%v",
+					done, len(codes), ok, fail, time.Since(start).Round(time.Second))
+			}
 			if err != nil || resp == nil {
 				fail++
+				if len(failCodes) < 50 {
+					if err != nil {
+						failCodes = append(failCodes, fmt.Sprintf("%s(%v)", c, err))
+					} else {
+						failCodes = append(failCodes, fmt.Sprintf("%s(空响应)", c))
+					}
+				}
 				return
 			}
 			short := full
@@ -207,6 +225,11 @@ func excalFetchXdxr(codes []string) (ok, fail int) {
 	}
 	wg.Wait()
 	excalMarkState("xdxr", fmt.Sprintf("ok=%d fail=%d", ok, fail), "")
+	log.Printf("xdxr排期抓取完成 共%d只 成功%d 失败%d 耗时%v",
+		len(codes), ok, fail, time.Since(start).Round(time.Second))
+	if len(failCodes) > 0 {
+		log.Printf("xdxr失败样本(%d个): %s", len(failCodes), strings.Join(failCodes, ", "))
+	}
 	return ok, fail
 }
 
@@ -434,6 +457,7 @@ func excalHeavyLoop() {
 			codes := make([]string, 0, len(stocks)+len(etfs))
 			codes = append(codes, stocks...)
 			codes = append(codes, etfs...)
+			log.Printf("xdxr排期全量开始 股票%d只+ETF%d只 共%d只", len(stocks), len(etfs), len(codes))
 			ok, fail := excalFetchXdxr(codes)
 			log.Printf("xdxr排期全量完成 ok=%d fail=%d (股票%d+ETF%d)", ok, fail, len(stocks), len(etfs))
 		}
