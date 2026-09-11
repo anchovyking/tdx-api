@@ -1096,6 +1096,191 @@ GET /api/indices?limit=20&offset=0
 
 ---
 
+## 📅 除权除息接口
+
+### 31. 获取除权除息记录（通达信 0x000f）
+
+**接口**: `GET /api/xdxr`
+
+**描述**: 通过通达信 `0x000f` 协议获取单只或批量证券的**全部除权除息/送转/配股/股本变化**历史记录（含未来已公布的除权安排）。数据实时从通达信服务器拉取，无缓存。支持股票与 ETF。
+
+**请求参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| code | string | 是 | 证券代码，支持单个或批量（逗号分隔，最多 50 只）。可带前缀（`sh600519`）或不带（`600519`） |
+
+**请求示例**:
+```
+GET /api/xdxr?code=600519
+GET /api/xdxr?code=600519,000001
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "count": 1,
+    "list": [
+      {
+        "code": "600519",
+        "records": [
+          {
+            "date": "2026-06-26",
+            "category": 1,
+            "category_name": "除权除息",
+            "fenhong": 280.2423095703125,
+            "peigujia": 0,
+            "songzhuangu": 0,
+            "peigu": 0,
+            "raw": "041f8c43000000000000000000000000"
+          }
+        ]
+      }
+    ],
+    "not_found": []
+  }
+}
+```
+
+**records 字段说明**:
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| date | string | 事件日期 `YYYY-MM-DD`。可大于今天（未来已公布的除权） |
+| category | int | 事件类别，见下表。**前复权只需 `category==1`** |
+| category_name | string | 类别名称 |
+| fenhong | float | **每10股**分红金额（元）；股票口径，ETF 为每份 |
+| peigujia | float | 配股价 |
+| songzhuangu | float | 每10股送转股数 |
+| peigu | float | 每10股配股数 |
+| raw | string | 16 字节原文（排查用，正常忽略） |
+
+**category 类别**:
+| 值 | 含义 |
+|----|------|
+| 1 | 除权除息（分红/送转/配股，前复权依据） |
+| 2 | 送配股上市 |
+| 3 | 非流通股上市 |
+| 5 | 股本变化 |
+| 9 | 转配股上市 |
+| 11/12 | 扩缩股 |
+
+**说明**:
+- `records` 是**全历史**（含非除权事件），取除权需过滤 `category==1`。
+- `fenhong` 存在 float32 精度尾差（如 `280.2423095703125`），使用时应 `round(x, 2)`。
+- 单股记录数视上市时长而定（如 `600519` 45 条、`002352` 93 条）。
+- `not_found` 存放查询不到数据的代码，不报错。
+
+---
+
+### 32. 查询除权除息排期
+
+**接口**: `GET /api/ex-calendar`
+
+**描述**: 查询除权除息排期日历（数据来自 `0x000f` 全市场定时抓取，入库 `data/database/excalendar.db` 的 `ex_calendar` 表）。支持按日期、代码、品种、来源查询。
+
+**请求参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| date | string | 否 | 除权日 `YYYYMMDD`（或带 `-`）。**不传 `date` 且不传 `code` 时默认查当天** |
+| code | string | 否 | 证券代码（不带前缀，如 `600519`） |
+| type | string | 否 | 品种：`stock` / `etf` |
+| source | string | 否 | 数据来源：`xdxr` / `giant` / `touzid` |
+
+**请求示例**:
+```
+GET /api/ex-calendar                              # 默认查当天
+GET /api/ex-calendar?date=20260918
+GET /api/ex-calendar?code=600519
+GET /api/ex-calendar?date=20260918&type=etf
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "count": 20,
+    "list": [
+      {
+        "code": "600309",
+        "market": "sh",
+        "type": "stock",
+        "ex_date": "2026-09-11",
+        "record_date": "",
+        "pay_date": "",
+        "announce_date": "",
+        "div_cash": 8.1,
+        "songzhuan": 0,
+        "peigu": 0,
+        "peigujia": 0,
+        "div_proc": "实施",
+        "source": "xdxr",
+        "title": "除权除息",
+        "updated_at": "2026-09-11 21:28:48"
+      }
+    ]
+  }
+}
+```
+
+**list 字段说明**:
+| 字段 | 说明 |
+|------|------|
+| code | 6 位代码 |
+| market | `sh` / `sz` / `bj` |
+| type | `stock` / `etf` |
+| ex_date | 除权除息日 `YYYY-MM-DD`（核心字段） |
+| record_date | 股权登记日（正文解析上线后回填，现为空） |
+| pay_date | 派息到账日（同上） |
+| announce_date | 实施公告日（公告源才有） |
+| div_cash | 每10股分红金额（股票）；float32 尾差建议 round 2 位 |
+| songzhuan | 每10股送转股数 |
+| peigu | 配股比例 |
+| peigujia | 配股价 |
+| div_proc | 进度：`实施`（只采实施） |
+| source | 来源：`xdxr`（TDX协议）/ `giant`（巨潮）/ `touzid`（投资数据网） |
+| title | 类别名或公告标题 |
+| updated_at | 入库时间 |
+
+**说明**:
+- 除权数据由定时任务全量抓取（股票约 5567 只 + ETF 约 2268 只），入库后此接口只读本地库。
+- 同一事件多来源各存一行（`source` 不同）；按 `date` 查只会命中 `ex_date` 非空行，按 `code` 查可能混有 `giant` 标题行（`ex_date` 为空）。
+- 返回上限 2000 条。
+
+---
+
+### 33. 手动刷新除权除息排期（运维）
+
+**接口**: `POST /api/ex-calendar/refresh`
+
+**描述**: 手动触发排期抓取，运维补数用，**勿用于扫全市场**（全量由定时任务负责）。
+
+**请求参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| source | string | 是 | 抓取源：`xdxr` / `giant` / `touzid` |
+| codes | string | source=xdxr 时必填 | 代码列表，逗号分隔，**最多 50 只** |
+
+**请求示例**:
+```
+POST /api/ex-calendar/refresh?source=xdxr&codes=600519,000001
+POST /api/ex-calendar/refresh?source=giant
+POST /api/ex-calendar/refresh?source=touzid
+```
+
+**响应示例**:
+```json
+{"code":0,"message":"success","data":{"ok":2,"fail":0}}
+```
+- `source=xdxr`：`ok`=成功只数，`fail`=失败只数
+- `source=giant`：`matched`=本次标题命中数（0 表示当天无实施公告）
+- `source=touzid`：默认屏蔽，未配置 Cookie 时返回错误提示
+
+---
+
 ## 💡 使用示例
 
 ### Python示例
