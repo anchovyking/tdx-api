@@ -156,9 +156,10 @@ def main():
     os.makedirs(os.path.dirname(args.db) or '.', exist_ok=True)
     conn = sqlite3.connect(args.db)
     cur = conn.cursor()
-    cur.execute('DROP TABLE IF EXISTS indices')
+    # 不 DROP：与程序启动时从 codes 同步的沪深指数(source=codes)共存。
+    # xlsx 主要补充中证/国证/港股/海外/MSCI 等跨市场指数。
     cur.execute('''
-        CREATE TABLE indices (
+        CREATE TABLE IF NOT EXISTS indices (
             code       TEXT NOT NULL,
             name       TEXT,
             market     TEXT,

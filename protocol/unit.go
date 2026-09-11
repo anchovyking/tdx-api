@@ -278,6 +278,26 @@ func IsBJStock(code string) bool {
 	return len(code) == 8 && strings.ToLower(code[0:2]) == ExchangeBJ.String() && (code[2:4] == "92" || code[2:4] == "43" || code[2:3] == "8")
 }
 
+// IsIndex 是否指数,示例sh000001(上证指数),sz399001(深证成指),sh880001(通达信板块指数)
+// 注意:sh000xxx与sz000xxx(深市股票)同码,需带交易所前缀区分
+func IsIndex(code string) bool {
+	if len(code) != 8 {
+		return false
+	}
+	code = strings.ToLower(code)
+	switch {
+	case code[0:2] == ExchangeSH.String() &&
+		(code[2:5] == "000" || code[2:4] == "88"):
+		//上证系列指数(sh000xxx) + 通达信板块/统计指数(sh880xxx/sh881xxx)
+		return true
+
+	case code[0:2] == ExchangeSZ.String() && code[2:5] == "399":
+		//深证系列指数(sz399xxx)
+		return true
+	}
+	return false
+}
+
 // IsETF 是否是基金,示例sz159558,sh510300
 func IsETF(code string) bool {
 	if len(code) != 8 {

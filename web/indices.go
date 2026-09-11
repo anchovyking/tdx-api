@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	_ "github.com/glebarez/go-sqlite"
+	"github.com/injoyai/tdx/protocol"
 )
 
 const indicesDBPath = "data/database/indices.db"
@@ -29,6 +31,8 @@ type IndexInfo struct {
 }
 
 // InitIndices 初始化指数数据库连接
+// 若 indices 表不存在,则从 codes 数据中自动提取沪深指数(IsIndex)建表填充;
+// 投资数据网 xlsx(scripts/import_indices.py)导入的扩展指数为可选补充,不覆盖沪深指数。
 func InitIndices() {
 	indicesOnce.Do(func() {
 		db, err := sql.Open("sqlite", indicesDBPath)
@@ -36,15 +40,53 @@ func InitIndices() {
 			log.Printf("打开指数数据库失败: %v", err)
 			return
 		}
-		// 检查表是否存在
-		var name string
-		if err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='indices'").Scan(&name); err != nil {
-			log.Printf("指数表不存在，请先运行 scripts/import_indices.py 导入数据: %v", err)
+		db.SetMaxOpenConns(1)
+
+		// 确保表存在
+		if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS indices (
+			code       TEXT NOT NULL,
+			name       TEXT,
+			market     TEXT,
+			source     TEXT DEFAULT 'touzid',
+			updated_at TEXT,
+			PRIMARY KEY (code, market)
+		)`); err != nil {
+			log.Printf("创建指数表失败: %v", err)
 			db.Close()
 			return
 		}
 		indicesDB = db
+
+		if err := indicesSyncFromCodes(); err != nil {
+			log.Printf("从codes同步指数失败: %v", err)
+		}
 	})
+}
+
+// indicesSyncFromCodes 从 codes 数据中提取沪深指数写入 indices 表(source=codes)
+func indicesSyncFromCodes() error {
+	models, err := getAllCodeModels()
+	if err != nil {
+		return err
+	}
+	indicesMu.Lock()
+	defer indicesMu.Unlock()
+	now := time.Now().Format(time.RFC3339)
+	n := 0
+	for _, m := range models {
+		full := m.FullCode()
+		if !protocol.IsIndex(full) {
+			continue
+		}
+		//去前缀,market取交易所
+		if _, err := indicesDB.Exec(
+			"INSERT OR REPLACE INTO indices(code,name,market,source,updated_at) VALUES(?,?,?,?,?)",
+			m.Code, m.Name, strings.ToLower(m.Exchange), "codes", now); err == nil {
+			n++
+		}
+	}
+	log.Printf("指数表已从codes同步 %d 条(沪深指数)", n)
+	return nil
 }
 
 // handleGetIndices 查询指数列表
