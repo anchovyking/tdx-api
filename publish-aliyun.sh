@@ -138,13 +138,17 @@ if [ "$SKIP_BUILD" -eq 1 ]; then
     write_step '跳过构建（--skip-build）'
 elif [ "$USE_BUILDX" -eq 1 ]; then
     write_step '构建并推送（docker buildx, linux/amd64）'
-    docker buildx build --platform linux/amd64 --tag "$IMAGE_NAME" --push --file "$DOCKERFILE" . \
+    docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
+        --tag "$IMAGE_NAME" --push --file "$DOCKERFILE" . \
         || die 'buildx 构建并推送失败'
     write_ok '构建并推送完成'
 else
     write_step '构建镜像'
     # Dockerfile 内已固定 GOOS=linux / GOARCH=amd64，产物即为 linux/amd64
-    docker build --tag "$IMAGE_NAME" --file "$DOCKERFILE" . || die '构建失败'
+    # --provenance=false --sbom=false: 禁用 attestation,产出 Docker v2 格式
+    # (否则新版BuildKit会生成 OCI 空层 manifest,阿里云registry报
+    #  "unknown manifest class for application/vnd.oci.empty.v1+json")
+    docker build --provenance=false --sbom=false --tag "$IMAGE_NAME" --file "$DOCKERFILE" . || die '构建失败'
     img_size=$(docker image inspect "$IMAGE_NAME" --format '{{.Size}}' 2>/dev/null || true)
     if [ -n "$img_size" ]; then
         write_ok "构建完成（镜像大小: $((img_size / 1024 / 1024)) MB）"

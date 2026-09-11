@@ -194,14 +194,17 @@ if ($SkipBuild) {
 }
 elseif ($UseBuildx) {
     Write-Step '构建并推送（docker buildx, linux/amd64）'
-    docker buildx build --platform linux/amd64 --tag $ImageName --push --file $Dockerfile .
+    docker buildx build --platform linux/amd64 --provenance=false --sbom=false --tag $ImageName --push --file $Dockerfile .
     Assert-LastExitCode 'buildx 构建并推送'
     Write-Ok '构建并推送完成'
 }
 else {
     Write-Step '构建镜像'
     # Dockerfile 内已固定 GOOS=linux / GOARCH=amd64，产物即为 linux/amd64
-    docker build --tag $ImageName --file $Dockerfile .
+    # --provenance=false --sbom=false: 禁用 attestation,产出 Docker v2 格式
+    # (否则新版BuildKit会生成 OCI 空层 manifest,阿里云registry报
+    #  "unknown manifest class for application/vnd.oci.empty.v1+json")
+    docker build --provenance=false --sbom=false --tag $ImageName --file $Dockerfile .
     Assert-LastExitCode '构建'
 
     $size = docker image inspect $ImageName --format '{{.Size}}'
