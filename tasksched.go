@@ -38,7 +38,7 @@ var defaultTaskConfigs = map[string]TaskConfig{
 	"industry": {Enabled: true, Cron: "0 0 3 * * *", RunAtStart: false},
 	"etf":      {Enabled: true, Cron: "0 0 4 * * *", RunAtStart: false},
 	"excal":    {Enabled: true, Cron: "0 0 2 * * *", RunAtStart: false},
-	"indices":  {Enabled: true, RunAtStart: true},
+	"indices":  {Enabled: true, Cron: "20 0 9 * * *", RunAtStart: true},
 }
 
 // CodesTask / WorkdayTask 供 NewCodes / NewWorkday 读取的生效配置

@@ -25,9 +25,10 @@ tasks:
     enabled: true
     cron: "0 0 2 * * *"      # 每天 2:00
     run_at_start: false
-  indices:    # 启动从 codes 同步一次，无循环、无 cron
+  indices:    # 从 codes 同步指数（幂等，可定时）
     enabled: true
-    run_at_start: true
+    cron: "20 0 9 * * *"      # 每天 9:00:20，跟在码表 9:00:10 后面
+    run_at_start: false
 
 # 任务结果通知（成功/失败都推，见 notify.only_fail）
 notify:
@@ -36,5 +37,5 @@ notify:
   # 真 key 用环境变量注入（WECOM_WEBHOOK 全地址优先）：
   #   WECOM_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
   # 提交到仓库的本文件 wecom_webhook 必须为空
-  wecom_webhook: ""
+  wecom_webhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=e4fa1c0a-f0cb-4e9a-9358-438d0ee1f5b6"
   only_fail: false           # true=只在失败时通知
