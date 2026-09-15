@@ -30,6 +30,14 @@ tasks:
     cron: "20 0 9 * * *"      # 每天 9:00:20，跟在码表 9:00:10 后面
     run_at_start: false
 
+# 抓取/同步性能参数（改完重启容器生效，无需改代码）
+sync:
+  # xdxr 排期全量的并发只数，默认 4，可 4~32（上限 64）
+  # 全市场约 7880 只：4 → 约 2.5 小时；8 → 约 1.2 小时；16 → 约 35 分钟
+  # 调大提速，但对 TDX 服务器压力更大；建议先试 8，观察失败率再往上加
+  # 环境变量覆盖：EXCAL_CONCURRENCY=16
+  excal_concurrency: 4
+
 # 任务结果通知（成功/失败都推，见 notify.only_fail）
 notify:
   enabled: true

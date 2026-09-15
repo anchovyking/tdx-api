@@ -148,6 +148,14 @@ func excalMarket(code6 string) string {
 
 // ============ 抓取器1: xdxr全量(股票,日期+金额完整) ============
 
+// excalConcurrency 返回生效的 xdxr 全量并发度（config.yaml#sync.excal_concurrency）
+func excalConcurrency() int {
+	if schedCfg == nil {
+		return tdx.EffectiveExcalConcurrency(0)
+	}
+	return tdx.EffectiveExcalConcurrency(schedCfg.Sync.ExcalConcurrency)
+}
+
 func excalFetchXdxr(codes []string) (ok, fail int) {
 	if manager == nil {
 		return 0, len(codes)
@@ -156,7 +164,9 @@ func excalFetchXdxr(codes []string) (ok, fail int) {
 	lastLog := start
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 4)
+	conc := excalConcurrency()
+	sem := make(chan struct{}, conc)
+	log.Printf("xdxr排期并发度 %d", conc)
 	done := 0
 	failCodes := make([]string, 0, 50) //失败样本,最多记录50个
 	for _, code := range codes {

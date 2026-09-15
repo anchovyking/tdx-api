@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,10 +26,36 @@ type NotifyConfig struct {
 	OnlyFail     bool   `yaml:"only_fail"`
 }
 
+// SyncConfig 抓取/同步性能参数（可在线调，无需改代码）
+type SyncConfig struct {
+	// ExcalConcurrency xdxr 排期全量的并发只数（默认 4）。调大可显著提速，
+	// 但对 TDX 服务器压力更大；建议 4~32。
+	ExcalConcurrency int `yaml:"excal_concurrency"`
+}
+
 // SchedulerConfig 调度总配置，对应 config.yaml
 type SchedulerConfig struct {
 	Tasks  map[string]TaskConfig `yaml:"tasks"`
 	Notify NotifyConfig          `yaml:"notify"`
+	Sync   SyncConfig            `yaml:"sync"`
+}
+
+// 内置默认（config.yaml 缺失/未填时的回退）
+const (
+	DefaultExcalConcurrency = 4
+	// 并发上限，防止填成 9999 直接把 TDX 打爆
+	MaxExcalConcurrency = 64
+)
+
+// EffectiveExcalConcurrency 返回生效的 xdxr 全量并发度；<=0 用默认，超过上限截断
+func EffectiveExcalConcurrency(n int) int {
+	if n <= 0 {
+		return DefaultExcalConcurrency
+	}
+	if n > MaxExcalConcurrency {
+		return MaxExcalConcurrency
+	}
+	return n
 }
 
 // 各任务在代码内置的默认值（config.yaml 缺失/解析失败时的回退，与仓库 config.yaml 一致）
@@ -62,6 +89,7 @@ func LoadTaskConfig(path string) *SchedulerConfig {
 	cfg := &SchedulerConfig{
 		Tasks:  make(map[string]TaskConfig, len(defaultTaskConfigs)),
 		Notify: NotifyConfig{Enabled: true, OnlyFail: false},
+		Sync:   SyncConfig{ExcalConcurrency: DefaultExcalConcurrency},
 	}
 	for k, v := range defaultTaskConfigs {
 		cfg.Tasks[k] = v
@@ -75,6 +103,7 @@ func LoadTaskConfig(path string) *SchedulerConfig {
 			cfg.Tasks[k] = v
 		}
 		cfg.Notify = NotifyConfig{Enabled: true, OnlyFail: false}
+		cfg.Sync = SyncConfig{ExcalConcurrency: DefaultExcalConcurrency}
 	}
 	// 环境变量覆盖单个任务
 	for name := range defaultTaskConfigs {
@@ -100,6 +129,14 @@ func LoadTaskConfig(path string) *SchedulerConfig {
 	}
 	if v := strings.TrimSpace(os.Getenv("NOTIFY_ONLY_FAIL")); v != "" {
 		cfg.Notify.OnlyFail = parseBoolEnv(v, cfg.Notify.OnlyFail)
+	}
+	// 抓取并发：EXCAL_CONCURRENCY 优先
+	if v := strings.TrimSpace(os.Getenv("EXCAL_CONCURRENCY")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Sync.ExcalConcurrency = n
+		} else {
+			log.Printf("EXCAL_CONCURRENCY(%s) 非整数，忽略", v)
+		}
 	}
 	return cfg
 }
