@@ -56,12 +56,16 @@ func init() {
 		}
 	}
 
+	// 连接池大小 = xdxr 全量并发度（config.yaml#sync.excal_concurrency）
+	// 池子若小于并发度，多余 goroutine 会排队等连接、实际并发被卡死在池子大小
+	poolSize := tdx.EffectiveExcalConcurrency(schedCfg.Sync.ExcalConcurrency)
 	manager, err = tdx.NewManage(&tdx.ManageConfig{
-		Number: 4,
+		Number: poolSize,
 	})
 	if err != nil {
 		log.Fatalf("初始化数据管理器失败: %v", err)
 	}
+	log.Printf("TDX 连接池大小 %d", poolSize)
 	// NewManage 内已按任务配置做过启动更新；这里仅在 run_at_start 时再全量刷一次
 	if tdx.CodesTask.RunAtStart {
 		if err := manager.Codes.Update(); err != nil {
