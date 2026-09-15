@@ -76,6 +76,7 @@ func schedRegisterManual(name string, fn func(trigger, arg string) (string, erro
 	schedTasks[name] = &taskStatus{Name: name, Enabled: t.Enabled, Cron: t.Cron, RunAtStart: t.RunAtStart}
 	schedFuncs[name] = fn
 	schedMu.Unlock()
+	log.Printf("任务 %s 已注册：enabled=%v cron=%s run_at_start=%v", name, t.Enabled, t.Cron, t.RunAtStart)
 }
 
 // schedRegister 注册 web 侧任务：cron 定时 + 启动跑（按配置）
