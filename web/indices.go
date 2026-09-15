@@ -37,7 +37,7 @@ type IndexInfo struct {
 // 投资数据网 xlsx(scripts/import_indices.py)导入的扩展指数为可选补充,不覆盖沪深指数。
 func InitIndices() {
 	indicesOnce.Do(func() {
-		db, err := sql.Open("sqlite", indicesDBPath)
+		db, err := sql.Open("sqlite", tdx.SqliteDSN(indicesDBPath))
 		if err != nil {
 			log.Printf("打开指数数据库失败: %v", err)
 			return

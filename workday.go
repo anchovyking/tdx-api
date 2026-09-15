@@ -48,6 +48,9 @@ func NewWorkdaySqlite(c *Client, filenames ...string) (*Workday, error) {
 	dir, _ := filepath.Split(filename)
 	_ = os.MkdirAll(dir, 0777)
 
+	//并发友好：撞锁等待 + WAL（读写撞上不再直接 SQLITE_BUSY）
+	filename = SqliteDSN(filename)
+
 	//连接数据库
 	db, err := xorm.NewEngine("sqlite", filename)
 	if err != nil {

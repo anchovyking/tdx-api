@@ -33,7 +33,7 @@ func InitExCalendar() {
 		if err := os.MkdirAll("data/database", 0755); err != nil {
 			log.Printf("创建排期数据目录失败: %v", err)
 		}
-		db, err := sql.Open("sqlite", excalDBPath)
+		db, err := sql.Open("sqlite", tdx.SqliteDSN(excalDBPath))
 		if err != nil {
 			log.Printf("打开排期数据库失败: %v", err)
 			return

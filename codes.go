@@ -51,6 +51,9 @@ func NewCodesSqlite(c *Client, filenames ...string) (*Codes, error) {
 	dir, _ := filepath.Split(filename)
 	_ = os.MkdirAll(dir, 0777)
 
+	//并发友好：撞锁等待 + WAL（多实例同写一库不再直接 SQLITE_BUSY）
+	filename = SqliteDSN(filename)
+
 	//连接数据库
 	db, err := xorm.NewEngine("sqlite", filename)
 	if err != nil {

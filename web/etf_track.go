@@ -34,7 +34,7 @@ var (
 // InitEtfTrack 初始化ETF跟踪标的存储并启动后台预热
 func InitEtfTrack() {
 	etfTrackOnce.Do(func() {
-		db, err := sql.Open("sqlite", etfTrackDBPath)
+		db, err := sql.Open("sqlite", tdx.SqliteDSN(etfTrackDBPath))
 		if err != nil {
 			log.Printf("打开ETF跟踪标的数据库失败: %v", err)
 			return

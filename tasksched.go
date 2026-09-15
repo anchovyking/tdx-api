@@ -136,6 +136,17 @@ func FormatDuration(d time.Duration) string {
 	}
 }
 
+// SqliteDSN 给 sqlite 文件路径加上并发友好的 DSN 参数：
+// _busy_timeout=10000 撞锁等 10 秒而不是立即 SQLITE_BUSY；
+// _journal_mode=WAL 读不再阻塞写。
+// 同一进程多实例同写一库、CLI 查询撞上写入都不再直接报错。
+func SqliteDSN(path string) string {
+	if strings.Contains(path, "?") {
+		return path
+	}
+	return path + "?_busy_timeout=10000&_journal_mode=WAL"
+}
+
 // cronParser 6 段含秒的解析器，与各处 cron.New(cron.WithSeconds()) 一致
 func cronParser() cron.Parser {
 	return cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)

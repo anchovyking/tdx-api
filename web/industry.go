@@ -37,7 +37,7 @@ var (
 // InitIndustry 初始化行业数据存储
 func InitIndustry() {
 	industryOnce.Do(func() {
-		db, err := sql.Open("sqlite", industryDBPath)
+		db, err := sql.Open("sqlite", tdx.SqliteDSN(industryDBPath))
 		if err != nil {
 			log.Printf("打开行业数据库失败: %v", err)
 			return
