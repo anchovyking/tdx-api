@@ -2,6 +2,7 @@ package tdx
 
 import (
 	"errors"
+	"fmt"
 	"github.com/injoyai/conv"
 	"github.com/injoyai/ios/client"
 	"github.com/injoyai/logs"
@@ -97,15 +98,8 @@ func NewCodes(c *Client, db *xorm.Engine) (*Codes, error) {
 		spec := EffectiveCron("codes", CodesTask.Cron)
 		task := cron.New(cron.WithSeconds())
 		if _, err := task.AddFunc(spec, func() {
-			var err error
-			for i := 0; i < 3; i++ {
-				if err = cc.Update(); err == nil {
-					break
-				}
-				logs.Err(err)
-				<-time.After(time.Minute * 5)
-			}
-			emitTaskDone("codes", "cron", err, "")
+			detail, err := cc.UpdateOnce()
+			emitTaskDone("codes", "cron", err, detail)
 		}); err != nil {
 			return nil, err
 		}
@@ -124,15 +118,15 @@ func NewCodes(c *Client, db *xorm.Engine) (*Codes, error) {
 		if now.Sub(node) > 0 {
 			//当前时间在9点之后,且更新时间在9点之前,需要更新
 			if updateTime.Sub(node) < 0 {
-				err := cc.Update()
-				emitTaskDone("codes", "start", err, "")
+				detail, err := cc.UpdateOnce()
+				emitTaskDone("codes", "start", err, detail)
 				return cc, err
 			}
 		} else {
 			//当前时间在9点之前,且更新时间在上个节点之前
 			if updateTime.Sub(node.Add(time.Hour*24)) < 0 {
-				err := cc.Update()
-				emitTaskDone("codes", "start", err, "")
+				detail, err := cc.UpdateOnce()
+				emitTaskDone("codes", "start", err, detail)
 				return cc, err
 			}
 		}
@@ -140,6 +134,24 @@ func NewCodes(c *Client, db *xorm.Engine) (*Codes, error) {
 
 	//从缓存中加载
 	return cc, cc.Update(true)
+}
+
+// UpdateOnce 单次全量更新（3次重试），返回一行式摘要明细
+func (this *Codes) UpdateOnce() (string, error) {
+	start := time.Now()
+	var err error
+	for i := 0; i < 3; i++ {
+		if err = this.Update(); err == nil {
+			break
+		}
+		logs.Err(err)
+		<-time.After(time.Minute * 5)
+	}
+	spent := FormatDuration(time.Since(start))
+	if err != nil {
+		return fmt.Sprintf("码表更新失败：%v（已用%s）", err, spent), err
+	}
+	return fmt.Sprintf("码表更新完成：共%d条，耗时%s", len(this.Map), spent), nil
 }
 
 type Codes struct {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	_ "github.com/glebarez/go-sqlite"
+	"github.com/injoyai/tdx"
 	"github.com/injoyai/tdx/protocol"
 )
 
@@ -58,20 +60,23 @@ func InitIndices() {
 		indicesDB = db
 
 		schedRegister("indices", func(trigger, arg string) (string, error) {
-			if err := indicesSyncFromCodes(); err != nil {
+			start := time.Now()
+			n, err := indicesSyncFromCodes()
+			if err != nil {
 				return "", err
 			}
-			return "指数表同步完成", nil
+			return fmt.Sprintf("指数表同步完成：共%d条，耗时%s",
+				n, tdx.FormatDuration(time.Since(start))), nil
 		})
 		// indices 无 cron（EffectiveCron 为空不注册），仅启动跑（run_at_start）与手动触发
 	})
 }
 
-// indicesSyncFromCodes 从 codes 数据中提取沪深指数写入 indices 表(source=codes)
-func indicesSyncFromCodes() error {
+// indicesSyncFromCodes 从 codes 数据中提取沪深指数写入 indices 表(source=codes)，返回同步条数
+func indicesSyncFromCodes() (int, error) {
 	models, err := getAllCodeModels()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	indicesMu.Lock()
 	defer indicesMu.Unlock()
@@ -90,7 +95,7 @@ func indicesSyncFromCodes() error {
 		}
 	}
 	log.Printf("指数表已从codes同步 %d 条(沪深指数)", n)
-	return nil
+	return n, nil
 }
 
 // handleGetIndices 查询指数列表

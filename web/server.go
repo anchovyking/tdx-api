@@ -831,6 +831,19 @@ func main() {
 	InitEtfTrack()
 	InitIndices()
 	InitExCalendar()
+	// codes/workday 的 cron 在根包构造器内，web 侧只补手动入口与状态位
+	schedRegisterManual("codes", func(trigger, arg string) (string, error) {
+		if manager == nil {
+			return "", fmt.Errorf("数据管理器未初始化")
+		}
+		return manager.Codes.UpdateOnce()
+	})
+	schedRegisterManual("workday", func(trigger, arg string) (string, error) {
+		if manager == nil {
+			return "", fmt.Errorf("数据管理器未初始化")
+		}
+		return manager.Workday.UpdateOnce()
+	})
 	schedStart()
 
 	port := ":8080"

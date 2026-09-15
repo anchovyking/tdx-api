@@ -69,13 +69,19 @@ func schedHook(name, trigger string, err error, detail string) {
 	notifyTask(name, trigger, err, st.LastDetail)
 }
 
-// schedRegister 注册 web 侧任务：cron 定时 + 启动跑（按配置）
-func schedRegister(name string, fn func(trigger, arg string) (string, error)) {
+// schedRegisterManual 仅注册手动入口与状态位（cron/启动由别处负责，如根包内的 codes/workday）
+func schedRegisterManual(name string, fn func(trigger, arg string) (string, error)) {
 	t := schedCfg.Tasks[name]
 	schedMu.Lock()
 	schedTasks[name] = &taskStatus{Name: name, Enabled: t.Enabled, Cron: t.Cron, RunAtStart: t.RunAtStart}
 	schedFuncs[name] = fn
 	schedMu.Unlock()
+}
+
+// schedRegister 注册 web 侧任务：cron 定时 + 启动跑（按配置）
+func schedRegister(name string, fn func(trigger, arg string) (string, error)) {
+	schedRegisterManual(name, fn)
+	t := schedCfg.Tasks[name]
 	if !t.Enabled {
 		log.Printf("任务 %s 已停用(enabled=false)", name)
 		return

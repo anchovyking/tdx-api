@@ -105,7 +105,8 @@ func etfTrackWarmOnce() (string, error) {
 		}
 		time.Sleep(etfTrackFetchDelay)
 	}
-	detail := fmt.Sprintf("ETF跟踪标的预热完成，成功 %d/%d，耗时 %.0f 分钟", ok, len(missing), time.Since(start).Minutes())
+	detail := fmt.Sprintf("ETF预热完成：成功%d，失败%d，共%d只，耗时%s",
+		ok, failCount, len(missing), tdx.FormatDuration(time.Since(start)))
 	log.Print(detail)
 	return detail, nil
 }

@@ -2,6 +2,7 @@ package tdx
 
 import (
 	"errors"
+	"fmt"
 	_ "github.com/glebarez/go-sqlite"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/injoyai/base/maps"
@@ -78,15 +79,8 @@ func NewWorkday(c *Client, db *xorm.Engine) (*Workday, error) {
 	spec := EffectiveCron("workday", WorkdayTask.Cron)
 	task := cron.New(cron.WithSeconds())
 	if _, err := task.AddFunc(spec, func() {
-		var err error
-		for i := 0; i < 3; i++ {
-			if err = w.Update(); err == nil {
-				break
-			}
-			logs.Err(err)
-			<-time.After(time.Minute * 5)
-		}
-		emitTaskDone("workday", "cron", err, "")
+		detail, err := w.UpdateOnce()
+		emitTaskDone("workday", "cron", err, detail)
 	}); err != nil {
 		return nil, err
 	}
@@ -117,6 +111,25 @@ func (this *Workday) loadCache() error {
 		this.cache.Set(uint64(v.Unix), true)
 	}
 	return nil
+}
+
+// UpdateOnce 单次更新（3次重试），返回一行式摘要明细
+func (this *Workday) UpdateOnce() (string, error) {
+	start := time.Now()
+	var err error
+	for i := 0; i < 3; i++ {
+		if err = this.Update(); err == nil {
+			break
+		}
+		logs.Err(err)
+		<-time.After(time.Minute * 5)
+	}
+	spent := FormatDuration(time.Since(start))
+	if err != nil {
+		return fmt.Sprintf("交易日历更新失败：%v（已用%s）", err, spent), err
+	}
+	n, _ := this.db.Count(new(WorkdayModel))
+	return fmt.Sprintf("交易日历更新完成：共%d个交易日，耗时%s", n, spent), nil
 }
 
 // Update 更新

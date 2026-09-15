@@ -15,6 +15,7 @@ import (
 	"time"
 
 	_ "github.com/glebarez/go-sqlite"
+	"github.com/injoyai/tdx"
 	"github.com/injoyai/tdx/protocol"
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
@@ -114,7 +115,8 @@ func industryWarmOnce() (string, error) {
 		}
 		time.Sleep(3 * time.Second)
 	}
-	detail := fmt.Sprintf("行业预热完成，成功 %d/%d，耗时 %.0f 分钟", ok, len(missing), time.Since(start).Minutes())
+	detail := fmt.Sprintf("行业预热完成：成功%d，失败%d，共%d只，耗时%s",
+		ok, failCount, len(missing), tdx.FormatDuration(time.Since(start)))
 	log.Print(detail)
 	return detail, nil
 }

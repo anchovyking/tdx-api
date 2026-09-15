@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/robfig/cron/v3"
 	"gopkg.in/yaml.v3"
@@ -111,6 +112,27 @@ func parseBoolEnv(v string, def bool) bool {
 		return false
 	default:
 		return def
+	}
+}
+
+// FormatDuration 耗时统一格式：≥1小时→"1小时35分"，≥1分钟→"4分11秒"，"12分"，"8秒"
+func FormatDuration(d time.Duration) string {
+	s := int(d.Round(time.Second).Seconds())
+	if s < 0 {
+		s = 0
+	}
+	h, m, sec := s/3600, (s%3600)/60, s%60
+	switch {
+	case h > 0 && m > 0:
+		return fmt.Sprintf("%d小时%d分", h, m)
+	case h > 0:
+		return fmt.Sprintf("%d小时", h)
+	case m > 0 && sec > 0:
+		return fmt.Sprintf("%d分%d秒", m, sec)
+	case m > 0:
+		return fmt.Sprintf("%d分", m)
+	default:
+		return fmt.Sprintf("%d秒", sec)
 	}
 }
 

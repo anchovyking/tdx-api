@@ -256,8 +256,8 @@ func excalRunOnce(trigger, arg string) (string, error) {
 	}
 	start := time.Now()
 	ok, fail := excalFetchXdxr(codes)
-	detail := fmt.Sprintf("xdxr排期完成 ok=%d fail=%d 共%d只 耗时%v",
-		ok, fail, len(codes), time.Since(start).Round(time.Second))
+	detail := fmt.Sprintf("xdxr排期完成：成功%d，失败%d，共%d只，耗时%s",
+		ok, fail, len(codes), tdx.FormatDuration(time.Since(start)))
 	log.Print(detail)
 	if fail > 0 && ok == 0 {
 		return detail, fmt.Errorf("全部失败 fail=%d", fail)
