@@ -2,7 +2,11 @@ package tdx
 
 import (
 	"errors"
+	"strings"
+	"time"
+
 	"github.com/injoyai/base/safe"
+	"github.com/injoyai/logs"
 )
 
 // NewPool 简易版本的连接池
@@ -60,7 +64,32 @@ func (this *Pool) Do(fn func(c *Client) error) error {
 		return err
 	}
 	defer this.Put(c)
+	if err := fn(c); err == nil {
+		return nil
+	} else if !isNetErr(err) {
+		return err //业务错误（错码/解码失败等）不重试
+	}
+	//网络类错误：等底层重拨完成再试一次（重拨一般1~2秒）
+	logs.Err(err, "连接异常，3秒后重试一次...")
+	<-time.After(time.Second * 3)
 	return fn(c)
+}
+
+// isNetErr 是否网络类错误（值得等重拨后重试一次）
+func isNetErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	for _, sub := range []string{
+		"timeout", "deadline", "eof", "reset", "broken pipe",
+		"refused", "network", "connection", "closed", "unreachable",
+	} {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 func (this *Pool) Go(fn func(c *Client)) error {
