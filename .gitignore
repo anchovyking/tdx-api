@@ -22,3 +22,4 @@ tmp/
 
 # 临时下载目录（指数xlsx等）
 temp/
+web/web
