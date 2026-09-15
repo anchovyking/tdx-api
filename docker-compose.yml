@@ -13,8 +13,9 @@ services:
     environment:
       - TZ=Asia/Shanghai
       # 任务调度见 config.yaml（环境变量可覆盖单个任务，见 config.yaml 头部注释）
-      # 企微通知 key（涉密，不要提交到仓库）：
-      # - WECOM_WEBHOOK=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx
+      # 企微通知 key 透传（无值=取宿主机环境变量，密钥不进仓库）：
+      # 宿主机先执行 export WECOM_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
+      #- WECOM_WEBHOOK
     networks:
       - stock-network
     healthcheck:
