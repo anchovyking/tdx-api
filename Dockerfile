@@ -24,7 +24,8 @@ RUN go mod download
 COPY . .
 
 # 在子 shell 中编译,避免模块路径混淆问题; -buildvcs=false 避免git目录权限导致的VCS报错
-RUN go mod tidy && (cd web && go build -buildvcs=false -ldflags="-s -w" -o ../stock-web .)
+# 注意:不要在这里跑 go mod tidy,它会下载依赖的测试包,网络一抖就崩;go.mod/go.sum 由开发机维护
+RUN (cd web && go build -mod=mod -buildvcs=false -ldflags="-s -w" -o ../stock-web .)
 
 # 多阶段构建 - 第二阶段：运行
 FROM registry.cn-chengdu.aliyuncs.com/anchovypublic/golang:1.22
