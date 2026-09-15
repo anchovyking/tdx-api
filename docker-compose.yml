@@ -8,16 +8,13 @@ services:
       - "18080:8080"
     volumes:
       - ./data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
-      # 重循环间隔(小时): xdxr全市场(股票+ETF约7800只)扫一遍入库,一次约4分钟,每天夜里跑一次即可
-      - EXCAL_HEAVY_INTERVAL_HOURS=24
-      # 巨潮抓取默认停用(除权数据已由xdxr 0x000f全覆盖);如需启用打开下面一项
-      # - EXCAL_GIANT=1
-      # 投资数据网抓取默认屏蔽;启用需同时打开下面两项
-      # - EXCAL_TOUZID=1
-      # - TOUZID_COOKIE=找管理员要,不要提交到仓库
+      # 任务调度见 config.yaml（环境变量可覆盖单个任务，见 config.yaml 头部注释）
+      # 企微通知 key（涉密，不要提交到仓库）：
+      # - WECOM_WEBHOOK=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx
     networks:
       - stock-network
     healthcheck:

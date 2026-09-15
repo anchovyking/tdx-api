@@ -7,6 +7,7 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/tdx/protocol"
 	"github.com/robfig/cron/v3"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -87,19 +88,33 @@ func NewCodes(c *Client, db *xorm.Engine) (*Codes, error) {
 		db:     db,
 	}
 
-	{ //设置定时器,每天早上9点更新数据
+	if !CodesTask.Enabled {
+		log.Printf("码表任务已停用(enabled=false)，跳过定时与启动更新，仅从缓存加载")
+		return cc, cc.Update(true)
+	}
+
+	{ //设置定时器，cron 由任务配置决定（默认每天早上 9:00:10）
+		spec := EffectiveCron("codes", CodesTask.Cron)
 		task := cron.New(cron.WithSeconds())
-		task.AddFunc("10 0 9 * * *", func() {
+		if _, err := task.AddFunc(spec, func() {
+			var err error
 			for i := 0; i < 3; i++ {
-				err := cc.Update()
-				if err == nil {
-					return
+				if err = cc.Update(); err == nil {
+					break
 				}
 				logs.Err(err)
 				<-time.After(time.Minute * 5)
 			}
-		})
+			emitTaskDone("codes", "cron", err, "")
+		}); err != nil {
+			return nil, err
+		}
 		task.Start()
+	}
+
+	if !CodesTask.RunAtStart {
+		//启动不更新，仅从缓存加载
+		return cc, cc.Update(true)
 	}
 
 	{ //判断是否更新过,更新过则不更新
@@ -109,12 +124,16 @@ func NewCodes(c *Client, db *xorm.Engine) (*Codes, error) {
 		if now.Sub(node) > 0 {
 			//当前时间在9点之后,且更新时间在9点之前,需要更新
 			if updateTime.Sub(node) < 0 {
-				return cc, cc.Update()
+				err := cc.Update()
+				emitTaskDone("codes", "start", err, "")
+				return cc, err
 			}
 		} else {
 			//当前时间在9点之前,且更新时间在上个节点之前
 			if updateTime.Sub(node.Add(time.Hour*24)) < 0 {
-				return cc, cc.Update()
+				err := cc.Update()
+				emitTaskDone("codes", "start", err, "")
+				return cc, err
 			}
 		}
 	}

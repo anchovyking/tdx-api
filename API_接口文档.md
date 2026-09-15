@@ -1186,7 +1186,7 @@ GET /api/xdxr?code=600519,000001
 | date | string | 否 | 除权日 `YYYYMMDD`（或带 `-`）。**不传 `date` 且不传 `code` 时默认查当天** |
 | code | string | 否 | 证券代码（不带前缀，如 `600519`） |
 | type | string | 否 | 品种：`stock` / `etf` |
-| source | string | 否 | 数据来源：`xdxr` / `giant` / `touzid` |
+| source | string | 否 | 数据来源过滤，当前只有 `xdxr` |
 
 **请求示例**:
 ```
@@ -1241,43 +1241,55 @@ GET /api/ex-calendar?date=20260918&type=etf
 | peigu | 配股比例 |
 | peigujia | 配股价 |
 | div_proc | 进度：`实施`（只采实施） |
-| source | 来源：`xdxr`（TDX协议）/ `giant`（巨潮）/ `touzid`（投资数据网） |
-| title | 类别名或公告标题 |
+| source | 来源：`xdxr`（TDX 协议 0x000f） |
+| title | 类别名 |
 | updated_at | 入库时间 |
 
 **说明**:
-- 除权数据由定时任务全量抓取（股票约 5567 只 + ETF 约 2268 只），入库后此接口只读本地库。
-- 同一事件多来源各存一行（`source` 不同）；按 `date` 查只会命中 `ex_date` 非空行，按 `code` 查可能混有 `giant` 标题行（`ex_date` 为空）。
+- 除权数据由定时任务全量抓取（股票约 5567 只 + ETF 约 2268 只，见 `config.yaml#tasks.excal`，默认每天 2:00），入库后此接口只读本地库。
 - 返回上限 2000 条。
 
 ---
 
-### 33. 手动刷新除权除息排期（运维）
+### 33. 手动执行任务（运维）
 
-**接口**: `POST /api/ex-calendar/refresh`
+**接口**: `POST /api/admin/tasks/run`
 
-**描述**: 手动触发排期抓取，运维补数用，**勿用于扫全市场**（全量由定时任务负责）。
+**描述**: 手动触发一次后台任务（定时/cron 之外的补跑手段），与定时共用同一执行函数。
 
 **请求参数**:
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| source | string | 是 | 抓取源：`xdxr` / `giant` / `touzid` |
-| codes | string | source=xdxr 时必填 | 代码列表，逗号分隔，**最多 50 只** |
+| name | string | 是 | 任务名：`codes` / `workday` / `industry` / `etf` / `excal` / `indices` |
+| codes | string | 仅 `name=excal` 时可选 | 代码列表，逗号分隔，**最多 50 只**；不传则跑全市场 |
 
 **请求示例**:
 ```
-POST /api/ex-calendar/refresh?source=xdxr&codes=600519,000001
-POST /api/ex-calendar/refresh?source=giant
-POST /api/ex-calendar/refresh?source=touzid
+POST /api/admin/tasks/run?name=excal&codes=600519,000001
+POST /api/admin/tasks/run?name=excal
+POST /api/admin/tasks/run?name=industry
 ```
 
 **响应示例**:
 ```json
-{"code":0,"message":"success","data":{"ok":2,"fail":0}}
+{"code":0,"message":"success","data":{"name":"excal","detail":"xdxr排期完成 ok=2 fail=0 共2只 耗时3秒"}}
 ```
-- `source=xdxr`：`ok`=成功只数，`fail`=失败只数
-- `source=giant`：`matched`=本次标题命中数（0 表示当天无实施公告）
-- `source=touzid`：默认屏蔽，未配置 Cookie 时返回错误提示
+
+---
+
+### 34. 查询任务状态（运维）
+
+**接口**: `GET /api/admin/tasks/status`
+
+**描述**: 返回各任务的开关、cron、启动执行配置及上次执行情况。
+
+**响应示例**:
+```json
+{"code":0,"message":"success","data":{"count":6,"list":[
+  {"name":"excal","enabled":true,"cron":"0 0 2 * * *","run_at_start":false,
+   "last_trigger":"cron","last_start":"2026-09-15 02:00:00","last_end":"2026-09-15 02:04:11",
+   "last_ok":true,"last_detail":"xdxr排期完成 ok=7835 fail=0 共7835只 耗时4分11秒"}
+]}}
 
 ---
 

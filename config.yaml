@@ -1,0 +1,40 @@
+# tdx-api 任务调度配置
+# cron 为 6 段式（含秒），与 robfig/cron 兼容；时区跟随 TZ 环境变量（容器内 Asia/Shanghai）
+# 优先级：环境变量 > 本文件 > 代码内置默认
+# 环境变量覆盖：TASK_<NAME>_ENABLED / TASK_<NAME>_CRON / TASK_<NAME>_RUN_AT_START
+#   （NAME=codes,workday,industry,etf,excal,indices；enabled/run_at_start 取 1,true,0,false）
+# 本文件缺失或解析失败时：记日志并使用代码内置默认（与本文件默认值一致）
+tasks:
+  codes:      # 码表更新
+    enabled: true
+    cron: "10 0 9 * * *"     # 每天 9:00:10
+    run_at_start: false
+  workday:    # 交易日历更新
+    enabled: true
+    cron: "0 0 9 * * *"      # 每天 9:00:00
+    run_at_start: false
+  industry:   # 行业预热补缺
+    enabled: true
+    cron: "0 0 3 * * *"      # 每天 3:00
+    run_at_start: false
+  etf:        # ETF 跟踪预热补缺
+    enabled: true
+    cron: "0 0 4 * * *"      # 每天 4:00
+    run_at_start: false
+  excal:      # xdxr 排期全量
+    enabled: true
+    cron: "0 0 2 * * *"      # 每天 2:00
+    run_at_start: false
+  indices:    # 启动从 codes 同步一次，无循环、无 cron
+    enabled: true
+    run_at_start: true
+
+# 任务结果通知（成功/失败都推，见 notify.only_fail）
+notify:
+  enabled: true
+  # 企业微信群机器人 webhook；key 涉密，本文件只留空占位，
+  # 真 key 用环境变量注入（WECOM_WEBHOOK 全地址优先）：
+  #   WECOM_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
+  # 提交到仓库的本文件 wecom_webhook 必须为空
+  wecom_webhook: ""
+  only_fail: false           # true=只在失败时通知

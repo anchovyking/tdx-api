@@ -67,19 +67,37 @@ func NewWorkday(c *Client, db *xorm.Engine) (*Workday, error) {
 		db:     db,
 		cache:  maps.NewBit(),
 	}
-	//设置定时器,每天早上9点更新数据,8点多获取不到今天的数据
+	if !WorkdayTask.Enabled {
+		//停用：不注册定时、不启动更新，仅加载缓存
+		if err := w.loadCache(); err != nil {
+			return nil, err
+		}
+		return w, nil
+	}
+	//设置定时器，cron 由任务配置决定（默认每天早上 9 点更新数据）
+	spec := EffectiveCron("workday", WorkdayTask.Cron)
 	task := cron.New(cron.WithSeconds())
-	task.AddFunc("0 0 9 * * *", func() {
+	if _, err := task.AddFunc(spec, func() {
+		var err error
 		for i := 0; i < 3; i++ {
-			err := w.Update()
-			if err == nil {
-				return
+			if err = w.Update(); err == nil {
+				break
 			}
 			logs.Err(err)
 			<-time.After(time.Minute * 5)
 		}
-	})
+		emitTaskDone("workday", "cron", err, "")
+	}); err != nil {
+		return nil, err
+	}
 	task.Start()
+	if !WorkdayTask.RunAtStart {
+		//启动不更新，仅加载本地缓存
+		if err := w.loadCache(); err != nil {
+			return nil, err
+		}
+		return w, nil
+	}
 	return w, w.Update()
 }
 
@@ -87,6 +105,18 @@ type Workday struct {
 	*Client
 	db    *xorm.Engine
 	cache maps.Bit
+}
+
+// loadCache 仅从本地库加载缓存，不拉取（启动不更新时用）
+func (this *Workday) loadCache() error {
+	all := []*WorkdayModel(nil)
+	if err := this.db.Find(&all); err != nil {
+		return err
+	}
+	for _, v := range all {
+		this.cache.Set(uint64(v.Unix), true)
+	}
+	return nil
 }
 
 // Update 更新

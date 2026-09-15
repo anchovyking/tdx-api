@@ -23,6 +23,16 @@ var (
 )
 
 func init() {
+	// 最先加载调度配置（config.yaml + 环境变量覆盖 + 内置默认）
+	schedCfg = tdx.LoadTaskConfig("config.yaml")
+	tdx.CodesTask = schedCfg.Tasks["codes"]
+	tdx.WorkdayTask = schedCfg.Tasks["workday"]
+	tdx.TaskDoneHook = schedHook
+	notifyCfg = schedCfg.Notify
+	log.Printf("调度配置已加载：codes/cron=%s/start=%v workday/cron=%s/start=%v notify=%v",
+		tdx.CodesTask.Cron, tdx.CodesTask.RunAtStart,
+		tdx.WorkdayTask.Cron, tdx.WorkdayTask.RunAtStart, notifyCfg.Enabled)
+
 	var err error
 	// 连接通达信服务器
 	client, err = tdx.DialDefault(tdx.WithDebug(false))
@@ -52,11 +62,16 @@ func init() {
 	if err != nil {
 		log.Fatalf("初始化数据管理器失败: %v", err)
 	}
-	if err := manager.Codes.Update(); err != nil {
-		log.Printf("更新管理器代码库失败: %v", err)
+	// NewManage 内已按任务配置做过启动更新；这里仅在 run_at_start 时再全量刷一次
+	if tdx.CodesTask.RunAtStart {
+		if err := manager.Codes.Update(); err != nil {
+			log.Printf("更新管理器代码库失败: %v", err)
+		}
 	}
-	if err := manager.Workday.Update(); err != nil {
-		log.Printf("更新交易日数据失败: %v", err)
+	if tdx.WorkdayTask.RunAtStart {
+		if err := manager.Workday.Update(); err != nil {
+			log.Printf("更新交易日数据失败: %v", err)
+		}
 	}
 	manager.Cron.Start()
 }
@@ -809,12 +824,14 @@ func main() {
 	http.HandleFunc("/api/indices", handleGetIndices)
 	http.HandleFunc("/api/xdxr", handleGetXdxr)
 	http.HandleFunc("/api/ex-calendar", handleGetExCalendar)
-	http.HandleFunc("/api/ex-calendar/refresh", handleRefreshExCalendar)
+	http.HandleFunc("/api/admin/tasks/run", handleAdminTaskRun)
+	http.HandleFunc("/api/admin/tasks/status", handleAdminTaskStatus)
 
 	InitIndustry()
 	InitEtfTrack()
 	InitIndices()
 	InitExCalendar()
+	schedStart()
 
 	port := ":8080"
 	log.Printf("服务启动成功，访问 http://localhost%s\n", port)

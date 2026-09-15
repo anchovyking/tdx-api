@@ -57,9 +57,13 @@ func InitIndices() {
 		}
 		indicesDB = db
 
-		if err := indicesSyncFromCodes(); err != nil {
-			log.Printf("从codes同步指数失败: %v", err)
-		}
+		schedRegister("indices", func(trigger, arg string) (string, error) {
+			if err := indicesSyncFromCodes(); err != nil {
+				return "", err
+			}
+			return "指数表同步完成", nil
+		})
+		// indices 无 cron（EffectiveCron 为空不注册），仅启动跑（run_at_start）与手动触发
 	})
 }
 

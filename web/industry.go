@@ -64,59 +64,59 @@ func InitIndustry() {
 		}
 		db.Exec("ALTER TABLE industry_failed ADD COLUMN last_error TEXT DEFAULT ''")
 		industryDB = db
-		go industryWarmLoop()
+		schedRegister("industry", func(trigger, arg string) (string, error) {
+			return industryWarmOnce()
+		})
 	})
 }
 
 // warmMu 预热互斥锁：行业与ETF预热串行执行，避免并发触发限流
 var warmMu sync.Mutex
 
-// industryWarmLoop 启动后自动补齐缺失行业数据，之后每天检查一次新增股票
-func industryWarmLoop() {
-	time.Sleep(1 * time.Minute)
-	for {
-		warmMu.Lock()
-		missing, err := industryMissingCodes()
-		if err != nil {
-			log.Printf("行业预热检查失败: %v", err)
-		} else if len(missing) == 0 {
-			log.Printf("行业数据已全部缓存")
-		} else {
-			log.Printf("行业预热开始，待补 %d 只", len(missing))
-			ok := 0
-			failCount := 0
-			consecutiveFails := 0
-			start := time.Now()
-			for i, code := range missing {
-				_, fetchErr := industryFetchSingle(code)
-				if fetchErr != nil {
-					failCount++
-					log.Printf("行业预热[%d/%d] %s 失败: %v", i+1, len(missing), code, fetchErr)
-					// 仅网络类错误触发熔断；数据源无档案的代码不暂停
-					if !errors.Is(fetchErr, errIndustryNotFound) {
-						consecutiveFails++
-						if consecutiveFails >= 5 {
-							log.Printf("行业预热连续失败%d次，暂停5分钟防限流", consecutiveFails)
-							time.Sleep(5 * time.Minute)
-							consecutiveFails = 0
-						}
-					}
-				} else {
-					ok++
+// industryWarmOnce 补齐缺失行业数据（单次，供 cron/手动调用）
+func industryWarmOnce() (string, error) {
+	warmMu.Lock()
+	defer warmMu.Unlock()
+	missing, err := industryMissingCodes()
+	if err != nil {
+		return "", err
+	}
+	if len(missing) == 0 {
+		return "行业数据已全部缓存", nil
+	}
+	log.Printf("行业预热开始，待补 %d 只", len(missing))
+	ok := 0
+	failCount := 0
+	consecutiveFails := 0
+	start := time.Now()
+	for i, code := range missing {
+		_, fetchErr := industryFetchSingle(code)
+		if fetchErr != nil {
+			failCount++
+			log.Printf("行业预热[%d/%d] %s 失败: %v", i+1, len(missing), code, fetchErr)
+			// 仅网络类错误触发熔断；数据源无档案的代码不暂停
+			if !errors.Is(fetchErr, errIndustryNotFound) {
+				consecutiveFails++
+				if consecutiveFails >= 5 {
+					log.Printf("行业预热连续失败%d次，暂停5分钟防限流", consecutiveFails)
+					time.Sleep(5 * time.Minute)
 					consecutiveFails = 0
 				}
-				industryMarkResult(code, fetchErr)
-				if (i+1)%5 == 0 {
-					log.Printf("行业预热进度 %d/%d 成功%d 失败%d 已耗时%.0f分钟",
-						i+1, len(missing), ok, failCount, time.Since(start).Minutes())
-				}
-				time.Sleep(3 * time.Second)
 			}
-			log.Printf("行业预热完成，成功 %d/%d，耗时 %.0f 分钟", ok, len(missing), time.Since(start).Minutes())
+		} else {
+			ok++
+			consecutiveFails = 0
 		}
-		warmMu.Unlock()
-		time.Sleep(24 * time.Hour)
+		industryMarkResult(code, fetchErr)
+		if (i+1)%5 == 0 {
+			log.Printf("行业预热进度 %d/%d 成功%d 失败%d 已耗时%.0f分钟",
+				i+1, len(missing), ok, failCount, time.Since(start).Minutes())
+		}
+		time.Sleep(3 * time.Second)
 	}
+	detail := fmt.Sprintf("行业预热完成，成功 %d/%d，耗时 %.0f 分钟", ok, len(missing), time.Since(start).Minutes())
+	log.Print(detail)
+	return detail, nil
 }
 
 // industryMissingCodes 全市场代码减去已缓存代码
