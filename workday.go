@@ -11,6 +11,7 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/tdx/protocol"
 	"github.com/robfig/cron/v3"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -85,6 +86,7 @@ func NewWorkday(c *Client, db *xorm.Engine) (*Workday, error) {
 		return nil, err
 	}
 	task.Start()
+	log.Printf("任务 workday cron 已注册: %s", spec)
 	if !WorkdayTask.RunAtStart {
 		//启动不更新，仅加载本地缓存
 		if err := w.loadCache(); err != nil {

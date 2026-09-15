@@ -104,6 +104,7 @@ func NewCodes(c *Client, db *xorm.Engine) (*Codes, error) {
 			return nil, err
 		}
 		task.Start()
+		log.Printf("任务 codes cron 已注册: %s", spec)
 	}
 
 	if !CodesTask.RunAtStart {
