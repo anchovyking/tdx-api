@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # 构建出的镜像名，直接推送到局域网 registry（免认证）
+    image: 192.168.0.201:5000/anchovyprivate/tdx-api-stock-web:latest
     container_name: tdx-stock-web
     ports:
       - "18080:8080"
