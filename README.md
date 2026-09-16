@@ -39,6 +39,9 @@ docker compose up -d --build
 **一键启动脚本：**
 - Linux/Mac: `chmod +x docker-start.sh && ./docker-start.sh`
 
+**推送到局域网 Registry：** 见 [DOCKER_局域网部署.md](DOCKER_局域网部署.md)
+（`./publish-lan.sh` 一键构建并推送到 `192.168.0.201:5000`）
+
 ### 方式二：源码运行
 
 ```bash
