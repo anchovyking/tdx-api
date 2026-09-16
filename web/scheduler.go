@@ -69,7 +69,7 @@ func schedHook(name, trigger string, err error, detail string) {
 	notifyTask(name, trigger, err, st.LastDetail)
 }
 
-// schedRegisterManual 仅注册手动入口与状态位（cron/启动由别处负责，如根包内的 codes/workday）
+// schedRegisterManual 注册任务的手动入口与状态位（schedRegister 内部调用）
 func schedRegisterManual(name string, fn func(trigger, arg string) (string, error)) {
 	t := schedCfg.Tasks[name]
 	schedMu.Lock()

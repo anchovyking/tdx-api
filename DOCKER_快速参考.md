@@ -2,12 +2,6 @@
 
 ## 🚀 一键启动
 
-### Windows
-```powershell
-双击运行: docker-start.bat
-```
-
-### Linux/Mac
 ```bash
 chmod +x docker-start.sh
 ./docker-start.sh

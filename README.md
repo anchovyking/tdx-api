@@ -30,14 +30,13 @@
 git clone https://github.com/oficcejo/tdx-api.git
 cd tdx-api
 
-# 启动服务（已配置国内镜像加速）
-docker-compose up -d
+# 启动服务（已配置国内镜像加速，--build 让源码改动能生效）
+docker compose up -d --build
 
-# 访问 http://localhost:8080
+# 访问 http://localhost:18080
 ```
 
 **一键启动脚本：**
-- Windows: 双击 `docker-start.bat`
 - Linux/Mac: `chmod +x docker-start.sh && ./docker-start.sh`
 
 ### 方式二：源码运行

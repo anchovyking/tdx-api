@@ -13,7 +13,6 @@ tdx-master/
 ├── Dockerfile              ✅ Docker镜像构建文件
 ├── docker-compose.yml      ✅ Docker编排配置
 ├── .dockerignore          ✅ Docker构建忽略文件
-├── docker-start.bat       ✅ Windows一键启动脚本
 ├── docker-start.sh        ✅ Linux/Mac一键启动脚本
 ├── DOCKER_DEPLOY.md       ✅ 详细部署文档
 └── DOCKER_快速参考.md      ✅ 常用命令速查
@@ -23,27 +22,16 @@ tdx-master/
 
 ## 🚀 三步启动（最简单）
 
-### Windows系统
-
-```powershell
-# 方法一：双击启动（最简单）
-双击运行: docker-start.bat
-
-# 方法二：命令行启动
-cd C:\Users\Administrator\Downloads\tdx-master
-docker-compose up -d
-```
-
 ### Linux/Mac系统
 
 ```bash
-# 方法一：脚本启动
+# 方法一：脚本启动（自动 --build，源码改动能生效）
 chmod +x docker-start.sh
 ./docker-start.sh
 
 # 方法二：命令行启动
-cd /path/to/tdx-master
-docker-compose up -d
+cd /path/to/tdx-project
+docker compose up -d --build
 ```
 
 **就这么简单！** 🎯
@@ -156,17 +144,14 @@ cd C:\Users\Administrator\Downloads\tdx-master
 ### 步骤3: 启动服务
 
 **方法一：使用启动脚本（推荐）**
-```powershell
-# Windows
-双击 docker-start.bat
-
-# Linux/Mac
+```bash
+# Linux/Mac（自动 --build）
 ./docker-start.sh
 ```
 
-**方法二：使用docker-compose**
-```powershell
-docker-compose up -d
+**方法二：使用 docker compose**
+```bash
+docker compose up -d --build
 ```
 
 ### 步骤4: 查看启动状态
@@ -362,22 +347,21 @@ docker-compose down --rmi all # 完全清理
 
 ### 立即开始使用
 
-1. **启动Docker Desktop** （如果还没启动）
+1. **确认 Docker 已启动**
 
 2. **进入项目目录**
-   ```powershell
-   cd C:\Users\Administrator\Downloads\tdx-master
+   ```bash
+   cd ~/project/tdx-api
    ```
 
 3. **一键启动**
-   ```powershell
-   # 双击这个文件:
-   docker-start.bat
+   ```bash
+   ./docker-start.sh
    ```
 
 4. **浏览器访问**
    ```
-   http://localhost:8080
+   http://localhost:18080
    ```
 
 5. **体验功能**

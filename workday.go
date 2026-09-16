@@ -10,8 +10,6 @@ import (
 	"github.com/injoyai/ios/client"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/tdx/protocol"
-	"github.com/robfig/cron/v3"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -72,32 +70,12 @@ func NewWorkday(c *Client, db *xorm.Engine) (*Workday, error) {
 		db:     db,
 		cache:  maps.NewBit(),
 	}
-	if !WorkdayTask.Enabled {
-		//停用：不注册定时、不启动更新，仅加载缓存
-		if err := w.loadCache(); err != nil {
-			return nil, err
-		}
-		return w, nil
-	}
-	//设置定时器，cron 由任务配置决定（默认每天早上 9 点更新数据）
-	spec := EffectiveCron("workday", WorkdayTask.Cron)
-	task := cron.New(cron.WithSeconds())
-	if _, err := task.AddFunc(spec, func() {
-		detail, err := w.UpdateOnce()
-		emitTaskDone("workday", "cron", err, detail)
-	}); err != nil {
+	// 调度（cron/启动）统一由 web 层 schedRegister 负责，这里只加载本地缓存。
+	// 库内不再自建定时器/启动更新，避免与 web 层重复执行。
+	if err := w.loadCache(); err != nil {
 		return nil, err
 	}
-	task.Start()
-	log.Printf("任务 workday cron 已注册: %s", spec)
-	if !WorkdayTask.RunAtStart {
-		//启动不更新，仅加载本地缓存
-		if err := w.loadCache(); err != nil {
-			return nil, err
-		}
-		return w, nil
-	}
-	return w, w.Update()
+	return w, nil
 }
 
 type Workday struct {

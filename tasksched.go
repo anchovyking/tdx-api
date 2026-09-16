@@ -68,11 +68,6 @@ var defaultTaskConfigs = map[string]TaskConfig{
 	"indices":  {Enabled: true, Cron: "20 0 9 * * *", RunAtStart: true},
 }
 
-// CodesTask / WorkdayTask 供 NewCodes / NewWorkday 读取的生效配置
-// 库默认值保持历史行为（启动更新），web 层在 init 时用 LoadTaskConfig 覆盖
-var CodesTask = TaskConfig{Enabled: true, Cron: "10 0 9 * * *", RunAtStart: true}
-var WorkdayTask = TaskConfig{Enabled: true, Cron: "0 0 9 * * *", RunAtStart: true}
-
 // TaskDoneHook 任务单次执行结束后的回调（trigger: cron/start/manual）
 // 由 web 层设置为通知+状态记录；库内仅在非空时调用
 var TaskDoneHook func(name, trigger string, err error, detail string)

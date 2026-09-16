@@ -25,13 +25,10 @@ var (
 func init() {
 	// 最先加载调度配置（config.yaml + 环境变量覆盖 + 内置默认）
 	schedCfg = tdx.LoadTaskConfig("config.yaml")
-	tdx.CodesTask = schedCfg.Tasks["codes"]
-	tdx.WorkdayTask = schedCfg.Tasks["workday"]
 	tdx.TaskDoneHook = schedHook
 	notifyCfg = schedCfg.Notify
-	log.Printf("调度配置已加载：codes/cron=%s/start=%v workday/cron=%s/start=%v notify=%v",
-		tdx.CodesTask.Cron, tdx.CodesTask.RunAtStart,
-		tdx.WorkdayTask.Cron, tdx.WorkdayTask.RunAtStart, notifyCfg.Enabled)
+	log.Printf("调度配置已加载：notify=%v excal_concurrency=%d",
+		notifyCfg.Enabled, schedCfg.Sync.ExcalConcurrency)
 
 	var err error
 	// 连接通达信服务器
@@ -66,17 +63,6 @@ func init() {
 		log.Fatalf("初始化数据管理器失败: %v", err)
 	}
 	log.Printf("TDX 连接池大小 %d", poolSize)
-	// NewManage 内已按任务配置做过启动更新；这里仅在 run_at_start 时再全量刷一次
-	if tdx.CodesTask.RunAtStart {
-		if err := manager.Codes.Update(); err != nil {
-			log.Printf("更新管理器代码库失败: %v", err)
-		}
-	}
-	if tdx.WorkdayTask.RunAtStart {
-		if err := manager.Workday.Update(); err != nil {
-			log.Printf("更新交易日数据失败: %v", err)
-		}
-	}
 	manager.Cron.Start()
 }
 
@@ -835,14 +821,14 @@ func main() {
 	InitEtfTrack()
 	InitIndices()
 	InitExCalendar()
-	// codes/workday 的 cron 在根包构造器内，web 侧只补手动入口与状态位
-	schedRegisterManual("codes", func(trigger, arg string) (string, error) {
+	// codes/workday 与其他任务一致，统一由 web 层 schedRegister 负责 cron/启动/手动/通知
+	schedRegister("codes", func(trigger, arg string) (string, error) {
 		if manager == nil {
 			return "", fmt.Errorf("数据管理器未初始化")
 		}
 		return manager.Codes.UpdateOnce()
 	})
-	schedRegisterManual("workday", func(trigger, arg string) (string, error) {
+	schedRegister("workday", func(trigger, arg string) (string, error) {
 		if manager == nil {
 			return "", fmt.Errorf("数据管理器未初始化")
 		}
