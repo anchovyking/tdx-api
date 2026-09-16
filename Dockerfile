@@ -1,6 +1,6 @@
 # 多阶段构建 - 第一阶段：构建
 # 使用阿里云私有仓库的golang镜像（与运行镜像同源,避免拉取docker.io超时）
-FROM registry.cn-chengdu.aliyuncs.com/anchovypublic/golang:1.22 AS builder
+FROM 192.168.0.201:5000/anchovypublic/golang:1.22 AS builder
 
 # 替换Alpine镜像源为阿里云(若基础镜像非alpine则跳过)
 RUN (test -f /etc/apk/repositories && sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories) || true
@@ -28,7 +28,7 @@ COPY . .
 RUN (cd web && go build -mod=mod -buildvcs=false -ldflags="-s -w" -o ../stock-web .)
 
 # 多阶段构建 - 第二阶段：运行
-FROM registry.cn-chengdu.aliyuncs.com/anchovypublic/golang:1.22
+FROM 192.168.0.201:5000/anchovypublic/golang:1.22
 
 # 安装必要的运行时依赖(Debian基础镜像,已自带ca-certificates/tzdata/wget时跳过)
 RUN (command -v wget >/dev/null 2>&1 && command -v tzdata >/dev/null 2>&1) || \
