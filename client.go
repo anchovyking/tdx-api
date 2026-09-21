@@ -47,8 +47,18 @@ func WithRedial(b ...bool) client.Option {
 }
 
 // DialDefault 默认连接方式
+// 先并发探活所有服务器、按延迟排序，可用的在前、失效的自动剔除，
+// 避免按死列表顺序连接时撞上失联IP长时间阻塞（如 timeout 2 分钟）
 func DialDefault(op ...client.Option) (cli *Client, err error) {
 	op = append([]client.Option{WithRedial()}, op...)
+	if fast := FastHosts(Hosts...); len(fast) > 0 {
+		hosts := make([]string, len(fast))
+		for i, r := range fast {
+			hosts[i] = r.Host
+		}
+		return DialHostsRange(hosts, op...)
+	}
+	//探活全部失败时退回完整列表（由底层重试逻辑兜底）
 	return DialHostsRange(Hosts, op...)
 }
 

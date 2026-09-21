@@ -2,7 +2,6 @@ package tdx
 
 import (
 	"github.com/injoyai/base/types"
-	"github.com/injoyai/logs"
 	"net"
 	"strings"
 	"sync"
@@ -78,6 +77,7 @@ var (
 )
 
 // FastHosts 通过tcp(ping不可用)连接速度的方式筛选排序可用的地址
+// 连不上的地址会被剔除（不进入返回结果），可用的按连接耗时升序排列
 func FastHosts(hosts ...string) []DialResult {
 	wg := sync.WaitGroup{}
 	wg.Add(len(hosts))
@@ -91,10 +91,10 @@ func FastHosts(hosts ...string) []DialResult {
 				addr += ":7709"
 			}
 			now := time.Now()
-			c, err := net.Dial("tcp", addr)
+			// 设超时，避免撞上失联IP时长时间阻塞（原实现无超时，遇 timeout 会卡数分钟）
+			c, err := net.DialTimeout("tcp", addr, HostProbeTimeout)
 			if err != nil {
-				logs.Err(err)
-				return
+				return //探测失败：安静跳过，不打日志（失效IP是常态，日志会刷屏）
 			}
 			spend := time.Since(now)
 			c.Close()
@@ -111,6 +111,9 @@ func FastHosts(hosts ...string) []DialResult {
 		return a.Spend < b.Spend
 	})
 }
+
+// HostProbeTimeout 探活单个地址的 TCP 连接超时
+const HostProbeTimeout = 2 * time.Second
 
 // DialResult 连接结果
 type DialResult struct {

@@ -838,5 +838,6 @@ func main() {
 
 	port := ":8080"
 	log.Printf("服务启动成功，访问 http://localhost%s\n", port)
-	log.Fatal(http.ListenAndServe(port, nil))
+	// 所有请求经过访问日志中间件，打印到控制台
+	log.Fatal(http.ListenAndServe(port, accessLogHandler(http.DefaultServeMux)))
 }
