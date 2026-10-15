@@ -113,11 +113,8 @@ func handleGetQuote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 根据 Decimal 修正价格倍数（ETF 等 3 位小数品种需回退 ×10）
-	for _, q := range quotes {
-		adjustQuotePrice(q)
-	}
-
+	// 注意：非股票品种的价格量纲已在 client.GetQuote 内经 m.Price() 统一为厘，
+	// 这里不再二次换算（曾对 K.* 又除以10，导致 ETF 的 K 与盘口差10倍，见 512880）。
 	successResponse(w, quotes)
 }
 
@@ -672,19 +669,10 @@ func handleTaskOperations(w http.ResponseWriter, r *http.Request) {
 
 // adjustQuotePrice 根据 Decimal 修正 Quote 中 K 线的价格倍数
 // 协议层 DecodeK 统一 ×10 将分转为厘，但 ETF 等 3 位小数品种不应 ×10
-func adjustQuotePrice(q *protocol.Quote) {
-	if q == nil {
-		return
-	}
-	decimal := getDecimal(q.Exchange.String() + q.Code)
-	if decimal == 3 {
-		q.K.Last /= 10
-		q.K.Open /= 10
-		q.K.High /= 10
-		q.K.Low /= 10
-		q.K.Close /= 10
-	}
-}
+// adjustQuotePrice 已删除：client.GetQuote 内已对非股票品种经 m.Price()
+// 统一量纲为厘，web 层曾对 K.* 再除以10，造成 ETF 的 K 与买卖盘差10倍（如 512880）。
+// 保留 getDecimal/adjustKlinePrices 供他处参考（adjustKlinePrices 当前无调用者）。
+
 
 // adjustKlinePrices 批量修正 Kline 列表的价格倍数
 func adjustKlinePrices(code string, list []*protocol.Kline) {

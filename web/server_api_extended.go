@@ -100,10 +100,7 @@ func handleBatchQuote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, q := range quotes {
-		adjustQuotePrice(q)
-	}
-
+	// 同上：client.GetQuote 已统一量纲为厘，不再二次换算。
 	successResponse(w, quotes)
 }
 

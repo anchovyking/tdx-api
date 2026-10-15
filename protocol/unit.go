@@ -329,8 +329,8 @@ func AddPrefix(code string) string {
 		case code[:2] == "30":
 			//深圳股票
 			code = ExchangeSZ.String() + code
-		case code[:3] == "510" || code[:3] == "511" || code[:3] == "512" || code[:3] == "513" || code[:3] == "515":
-			//上海基金
+		case code[:2] == "51":
+			//上海ETF(510-519全段；原只列510/511/512/513/515，漏516/517/518/519，如516860/517110)
 			code = ExchangeSH.String() + code
 		case code[:3] == "159":
 			//深圳基金
@@ -338,8 +338,8 @@ func AddPrefix(code string) string {
 		case code[:2] == "52" || code[:2] == "56" || code[:2] == "58":
 			//上海ETF新号段(520/526/560-563/588-589)
 			code = ExchangeSH.String() + code
-		case code[:2] == "16":
-			//深圳ETF/LOF(16x)
+		case code[:2] == "16" || code[:2] == "15" || code[:2] == "18":
+			//深圳ETF/LOF/分级(15x/16x/18x；原只有16x，补15x/18x)
 			code = ExchangeSZ.String() + code
 		case code[:1] == "8" || code[:2] == "92" || code[:2] == "43":
 			//北京股票

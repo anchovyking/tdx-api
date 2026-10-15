@@ -2,7 +2,7 @@
 
 ## 🌐 基础信息
 
-**Base URL**: `http://192.168.0.222:8080`  
+**Base URL**: `http://192.168.0.201:18080`  
 **Content-Type**: `application/json; charset=utf-8`  
 **编码**: UTF-8
 
@@ -417,7 +417,7 @@ GET /api/codes?exchange=sh
 
 **请求示例**:
 ```bash
-curl -X POST http://localhost:8080/api/batch-quote \
+curl -X POST http://192.168.0.201:18080/api/batch-quote \
   -H "Content-Type: application/json" \
   -d '{"codes":["000001","600519","601318"]}'
 ```
@@ -525,7 +525,7 @@ GET /api/index?code=sh000001&type=day
 
 **请求示例**:
 ```bash
-curl -X POST http://localhost:8080/api/tasks/pull-kline \
+curl -X POST http://192.168.0.201:18080/api/tasks/pull-kline \
   -H "Content-Type: application/json" \
   -d '{
     "codes": ["000001","600519"],
@@ -564,7 +564,7 @@ curl -X POST http://localhost:8080/api/tasks/pull-kline \
 
 **请求示例**:
 ```bash
-curl -X POST http://localhost:8080/api/tasks/pull-trade \
+curl -X POST http://192.168.0.201:18080/api/tasks/pull-trade \
   -H "Content-Type: application/json" \
   -d '{
     "code": "000001",
@@ -1300,7 +1300,7 @@ POST /api/admin/tasks/run?name=industry
 ```python
 import requests
 
-BASE_URL = "http://your-server:8080"
+BASE_URL = "http://192.168.0.201:18080"
 
 # 1. 获取五档行情
 def get_quote(code):
@@ -1383,7 +1383,7 @@ if __name__ == "__main__":
 ### JavaScript示例
 
 ```javascript
-const BASE_URL = 'http://your-server:8080';
+const BASE_URL = 'http://192.168.0.201:18080';
 
 // 1. 获取五档行情
 async function getQuote(code) {
@@ -1438,19 +1438,19 @@ async function batchGetQuote(codes) {
 
 ```bash
 # 1. 获取五档行情
-curl "http://localhost:8080/api/quote?code=000001"
+curl "http://192.168.0.201:18080/api/quote?code=000001"
 
 # 2. 获取日K线
-curl "http://localhost:8080/api/kline?code=000001&type=day"
+curl "http://192.168.0.201:18080/api/kline?code=000001&type=day"
 
 # 3. 获取分时数据
-curl "http://localhost:8080/api/minute?code=000001"
+curl "http://192.168.0.201:18080/api/minute?code=000001"
 
 # 4. 搜索股票
-curl "http://localhost:8080/api/search?keyword=平安"
+curl "http://192.168.0.201:18080/api/search?keyword=平安"
 
 # 5. 批量获取行情
-curl -X POST http://localhost:8080/api/batch-quote \
+curl -X POST http://192.168.0.201:18080/api/batch-quote \
   -H "Content-Type: application/json" \
   -d '{"codes":["000001","600519"]}'
 ```
