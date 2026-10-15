@@ -88,7 +88,7 @@ GET /api/quote?code=000001,600519
 ```
 
 **数据说明**:
-- 价格单位：厘（1元 = 1000厘）
+- 价格单位：厘（1元 = 1000厘）；股票与 ETF（含 3 位小数品种）的 `K` 与买卖盘价格统一为厘，可直接换算：元 = 价格 / 1000
 - 成交量单位：手（1手 = 100股）
 - 挂单量单位：股
 
@@ -718,7 +718,7 @@ curl -X POST http://192.168.0.201:18080/api/tasks/pull-trade \
 
 **接口**: `GET /api/workday`
 
-**描述**: 查询指定日期是否为交易日，并返回前后若干个最近的交易日。
+**描述**: 查询指定日期是否为交易日，并返回前后若干个最近的交易日；同时返回当前是否处于交易时段内（早盘 09:30-11:30，午盘 13:00-15:00）。
 
 **请求参数**:
 | 参数 | 类型 | 必填 | 说明 |
@@ -737,6 +737,12 @@ curl -X POST http://192.168.0.201:18080/api/tasks/pull-trade \
       "numeric": "20241108"
     },
     "is_workday": true,
+    "trading_session": {
+      "in_session": true,
+      "session": "morning",
+      "open": "09:30",
+      "close": "11:30"
+    },
     "next": [
       {
         "iso": "2024-11-11",
@@ -751,6 +757,35 @@ curl -X POST http://192.168.0.201:18080/api/tasks/pull-trade \
     ]
   }
 }
+```
+
+**`trading_session` 字段说明**:
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| in_session | bool | 现在是否处于交易时段内（是交易日 **且** 落在 09:30-11:30 或 13:00-15:00） |
+| session | string/null | `morning`（早盘）/`afternoon`（午盘），盘外为 `null` |
+| open / close | string | 盘中=本节时间；盘外=下一节时间（收盘后/节假日为下一交易日早盘 09:30/11:30，日期见 `next[0]`） |
+
+> 注：`date` 参数指定非当天日期时，`in_session` 恒为 `false`（无法对着一个指定日期判断"现在"）。
+
+**第三方使用逻辑**:
+
+```python
+data = get("/api/workday")["data"]
+
+# 第1步：先看是不是交易日
+if not data["is_workday"]:
+    return  # 休市，什么都不跑
+
+# 第2步：只看 in_session 一个字段
+ts = data["trading_session"]
+if ts["in_session"]:
+    拉行情()  # 盘中：session 告诉你早盘还是午盘
+else:
+    # 盘外：open 就是下一节开盘点
+    # 午休 → open=13:00（今天）；收盘后/节假日 → open=09:30（日期看 next[0]）
+    等到(next[0].iso + open)再跑()
 ```
 
 ---

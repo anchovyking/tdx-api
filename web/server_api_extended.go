@@ -833,12 +833,61 @@ func handleGetWorkday(w http.ResponseWriter, r *http.Request) {
 			"iso":     target.Format("2006-01-02"),
 			"numeric": target.Format("20060102"),
 		},
-		"is_workday": isWorkday,
-		"next":       collectNeighborWorkdays(target, count, 1),
-		"previous":   collectNeighborWorkdays(target, count, -1),
+		"is_workday":      isWorkday,
+		"trading_session": workdayTradingSession(target, isWorkday),
+		"next":            collectNeighborWorkdays(target, count, 1),
+		"previous":        collectNeighborWorkdays(target, count, -1),
 	}
 
 	successResponse(w, response)
+}
+
+// A股交易时段（分钟数，自零点起）：早盘 09:30-11:30，午盘 13:00-15:00
+var tradingSessions = []struct {
+	name  string
+	open  int
+	close int
+}{
+	{"morning", 9*60 + 30, 11*60 + 30},
+	{"afternoon", 13*60, 15*60},
+}
+
+// workdayTradingSession 计算查询日期的交易时段状态。
+// 规则：盘中→本节时间；盘外→下一节时间（收盘后/节假日为下一交易日早盘 09:30-11:30，日期见 next[0]）。
+// 非当天查询 in_session 恒为 false（无法对着一个指定日期判断"现在"）。
+func workdayTradingSession(target time.Time, isWorkday bool) map[string]interface{} {
+	sess := map[string]interface{}{
+		"in_session": false,
+		"session":    nil,
+		"open":       "09:30",
+		"close":      "11:30",
+	}
+	if !isWorkday {
+		return sess
+	}
+	now := time.Now()
+	if target.Format("20060102") != now.Format("20060102") {
+		// 查的是别的日期：给该日期早盘时间，in_session=false
+		return sess
+	}
+	mins := now.Hour()*60 + now.Minute()
+	for _, s := range tradingSessions {
+		if mins >= s.open && mins < s.close {
+			sess["in_session"] = true
+			sess["session"] = s.name
+			sess["open"] = fmt.Sprintf("%02d:%02d", s.open/60, s.open%60)
+			sess["close"] = fmt.Sprintf("%02d:%02d", s.close/60, s.close%60)
+			return sess
+		}
+		if mins < s.open {
+			// 当天还有下一节（早盘前/午休）：给下一节时间
+			sess["open"] = fmt.Sprintf("%02d:%02d", s.open/60, s.open%60)
+			sess["close"] = fmt.Sprintf("%02d:%02d", s.close/60, s.close%60)
+			return sess
+		}
+	}
+	// 当天已收盘：默认下一交易日早盘（日期见 next[0]）
+	return sess
 }
 
 // 获取指定范围内的交易日列表
